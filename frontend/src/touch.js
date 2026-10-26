@@ -22,7 +22,7 @@ export function createTouchControls() {
   for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,end);
  }
  document.getElementById('touchToggle').onclick=()=>setVisible(!enabled);
- window.addEventListener('blur',release);document.addEventListener('visibilitychange',()=>{if(document.hidden)release();});window.addEventListener('orientationchange',release);
+ window.addEventListener('blur',release);document.addEventListener('visibilitychange',()=>{if(document.hidden)release();});window.addEventListener('orientationchange',release);window.addEventListener('resize',release);
  document.getElementById('viewport').addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&!enabled)setVisible(true);},{passive:true});
  setVisible(matchMedia('(pointer: coarse)').matches||navigator.maxTouchPoints>0);
  return {release,sample:()=>enabled?{...state}:null,enabled:()=>enabled};
