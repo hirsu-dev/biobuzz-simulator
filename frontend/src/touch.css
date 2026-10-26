@@ -25,7 +25,10 @@ body.browser-engine .desktop-only { display:none!important; }
 .browser-code-note { padding:12px 16px; font-size:12px; line-height:1.5; color:#c7d1da; border-bottom:1px solid #49505c; background:#25252a; }
 .browser-code-note a { color:var(--gold); text-decoration:underline; }
 body.browser-engine #init,body.browser-engine #start,body.browser-engine #runInPlay { display:none; }
+body.browser-engine .station { display:none; }
 @media(max-width:650px) {
+ body[data-workspace=code] #editor { font-size:16px; line-height:24px; }
+ body[data-workspace=code] #lineNumbers { line-height:24px; }
  .touch-pad { width:112px; height:112px; left:14px; bottom:max(18px,env(safe-area-inset-bottom)); }
  .touch-actions { width:154px; right:14px; bottom:max(18px,env(safe-area-inset-bottom)); gap:6px; }
  .touch-actions button { min-height:43px; font-size:14px; } .touch-actions .touch-shoot { min-height:48px; }
