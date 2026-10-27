@@ -17,7 +17,7 @@ Open the link in a modern browser. Landscape works best. Touch controls appear a
 
 Choose **Play match** for a timed match or **Free drive** for practice. Quick matches start with two minutes of TeleOp. Full matches include autonomous and driver transition; your manually controlled robot waits during autonomous. Match results include a local replay.
 
-On a computer, use WASD, J/L or arrow keys to turn, Shift to intake, K to eject, Space to shoot, X to extract flower pollen, Tab for camera, and Esc for menu. Standard gamepads also work.
+On a computer, use WASD, J/L or arrow keys to turn, Shift to intake, K to eject, Space to shoot, X to extract flower pollen, Tab to switch Driver Station / Behind Robot, and Esc for menu. Scroll or pinch the field to zoom. Standard gamepads also work.
 
 ## Java code
 
@@ -46,13 +46,13 @@ The ten presets are Atlas Turret, REV DUO, goBILDA Starter, AndyMark Robits, Stu
 
 Rapier simulates rigid-body gravity, collisions, friction and projectiles at 120 Hz. Chassis use box colliders; wheel traction, intake capture, hive tipping, flower storage and scoring are simplified. The seeded starting layout, dynamics and AI are estimates. This is a practice tool, not an official scorer or a calibrated replacement for testing a physical robot. The displayed score includes projected achievements; penalties and referee decisions are not fully modeled.
 
-[Rebuild Simulator](https://rebuildsim.com/) inspired the title screen, right-side main menu, full-screen singleplayer setup with robot preview and stat bars, settings, minimal HUD and touch layout. The interface is recreated with original BIOBUZZ geometry and an openly licensed Silkscreen font. Rebuild’s author describes a C++/WebAssembly implementation at [salvobonsma.com](https://salvobonsma.com/); its engine and asset source were not found publicly released during this update. This website continues to use Rapier and does not claim matching physics. [MoSim](https://mosimulator.com/) inspired driver practice and robot selection. No Rebuild or MoSim code, branding, models or audio assets are included. This is singleplayer; multiplayer, rankings and accounts are not implemented.
+[Rebuild Simulator](https://rebuildsim.com/) inspired the title screen, right-side main menu, full-screen singleplayer setup with robot preview and stat bars, settings, minimal HUD and touch layout. The interface is recreated with original BIOBUZZ geometry and an openly licensed Silkscreen font. Rebuild’s author describes a C++/WebAssembly implementation at [salvobonsma.com](https://salvobonsma.com/); the public build also contains raylib/rlgl rendering signatures. Its physics library and tuning remain unverified. This website uses Three.js and Rapier, with recreated flat graphics and time-based camera tracking; it does not claim identical engine behavior. See [reference findings](REBUILD_RESEARCH.md). [MoSim](https://mosimulator.com/) inspired driver practice and robot selection. No Rebuild or MoSim code, branding, models or audio assets are included. This is singleplayer; multiplayer, rankings and accounts are not implemented.
 
 The local desktop integration was built around [FTCSim](https://github.com/WheatleyFromPortal2/FTCSim). The public web edition uses its own browser engine and does not distribute FTCSim source. [FIRST BIOBUZZ resources](https://ftc-resources.firstinspires.org/ftc/archive/2027/game) informed the field concept. This project is independent and is not endorsed by FIRST or the referenced vendors.
 
 ## Validation
 
-Eight automated checks cover all ten presets, finite pieces, drive types, wall collisions, ballistic shots, intake/ejection, pause and input reset, full-match timing, autonomous input blocking, AI scoring, and explicitly refusing unsupported Java execution. Phone-sized landscape and portrait layouts and pointer controls were checked in a desktop browser. Physical iPhone/Android multitouch and sustained mobile performance have not been device-tested.
+Thirteen automated checks cover all ten presets, finite pieces, drive types, wall collisions, ballistic shots, intake/ejection, pause and input reset, full-match timing, autonomous input blocking, AI scoring, explicitly refusing unsupported Java execution, equal driving behavior at different display rates, braking, diagonal speed limits, camera damping, interpolation, and bounded frame catch-up. Phone-sized landscape and portrait layouts and pointer controls were checked in a desktop browser. Physical iPhone/Android multitouch and sustained mobile performance have not been device-tested.
 
 ## Third-party software
 

@@ -1,4 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
+import {FixedClock} from './motion.js';
 
 const clamp=(n,a=-1,b=1)=>Math.max(a,Math.min(b,Number(n)||0));
 const vector=(x=0,y=0,z=0)=>({x,y,z});
@@ -18,11 +19,12 @@ export async function createBrowserEngine(presets,{autoStart=true}={}) {
 }
 
 class BrowserEngine {
- constructor(presets){this.presets=structuredClone(presets);this.selection=[0,5,6,2];this.ai=true;this.paused=false;this.listeners=new Set();this.input={};this.resetId=0;this.reset(6829);}
+ constructor(presets){this.clock=new FixedClock(STEP);this.presets=structuredClone(presets);this.selection=[0,5,6,2];this.ai=true;this.paused=false;this.listeners=new Set();this.input={};this.resetId=0;this.reset(6829);}
  subscribe(listener){this.listeners.add(listener);return()=>this.listeners.delete(listener);}
  emit(message){for(const listener of this.listeners)listener(message);}
  publish(){this.emit(this.snapshot());}
  reset(seed=this.seed,match=false,teleopOnly=false){
+  this.clock.reset();
   this.world?.free();this.world=new RAPIER.World(vector(0,-9.81,0));this.world.timestep=STEP;
   this.seed=seed|0;this.time=0;this.elapsed=teleopOnly?38:0;this.match=match;this.ended=false;this.resetId++;this.input={};
   this.bots=[];this.pieces=[];this.scenery=[];this.flowers=[];this.hives=[];this.event='Field ready';
@@ -62,10 +64,15 @@ class BrowserEngine {
  drive(bot,forward,strafe,turn){
   const p=this.presets[bot.preset],at=bot.body.translation();if(at.y>.19)return;
   if(p.drive==='tank')strafe=0;
+  const magnitude=Math.max(1,Math.hypot(forward,strafe));forward/=magnitude;strafe/=magnitude;
   const h=heading(bot.body),v=bot.body.linvel(),mass=bot.body.mass();
   const dx=(Math.cos(h)*forward+Math.sin(h)*strafe)*p.speed,dz=(-Math.sin(h)*forward+Math.cos(h)*strafe)*p.speed;
-  bot.body.applyImpulse(vector(clamp((dx-v.x)*7,-7,7)*mass*STEP,0,clamp((dz-v.z)*7,-7,7)*mass*STEP),true);
-  const av=bot.body.angvel();bot.body.applyTorqueImpulse(vector(0,clamp((-turn*3.2-av.y)*2,-8,8)*STEP,0),true);
+  // Traction-limited acceleration and stronger neutral braking, in SI units.
+  const braking=Math.hypot(forward,strafe)<.01,ax=(dx-v.x)*(braking?14:10),az=(dz-v.z)*(braking?14:10);
+  const limit=braking?9:7,scale=Math.min(1,limit/Math.max(.001,Math.hypot(ax,az)));
+  bot.body.applyImpulse(vector(ax*scale*mass*STEP,0,az*scale*mass*STEP),true);
+  const inertia=mass*(p.length*p.length+p.width*p.width)/12;
+  const av=bot.body.angvel();bot.body.applyTorqueImpulse(vector(0,clamp((-turn*3.2-av.y)*14,-18,18)*inertia*STEP,0),true);
  }
  shotPower(bot){const p=this.presets[bot.preset],at=bot.body.translation(),goal=this.goal(Math.floor(bot.id/2));const d=Math.max(.2,Math.hypot(goal.x-at.x,goal.z-at.z)-p.length/2-.08),angle=(p.shotAngle+(bot.hood-.5)*35)*Math.PI/180,denom=2*Math.cos(angle)**2*(d*Math.tan(angle)-(goal.y-(at.y+.26)));return denom>0?clamp(Math.sqrt(9.81*d*d/denom)*1.06/p.shotSpeed*.82,.12,1.2):.82;}
  interact(bot,intake,shoot,power,extract=false){
@@ -122,7 +129,7 @@ class BrowserEngine {
  }
  send(m){
   if(m.type==='hello'){this.emit({type:'hello',sdkVersion:'Desktop only',repoName:'Browser drafts'});this.emit({type:'opmodes',list:[],build:{success:false,summary:'Java drafts only · run in the desktop edition'}});}
-  else if(m.type==='sim.pause'){this.paused=!!m.paused;this.input={};}
+  else if(m.type==='sim.pause'){this.paused=!!m.paused;this.input={};this.clock.reset();}
   else if(m.type==='sim.step'){for(let i=0;i<Math.round(clamp(m.ms,0,1000)/1000/STEP);i++)this.step(true);}
   else if(m.type==='arena'){
    if(m.action==='input'){this.input={...m};return;}
@@ -135,9 +142,14 @@ class BrowserEngine {
   else if(m.type==='opmode.stop')this.input={};else return;
   this.publish();
  }
+ advance(elapsed){
+  if(this.paused||this.ended){this.clock.reset();return 0;}
+  const steps=this.clock.advance(elapsed,()=>this.step());
+  if(steps)this.publish();return steps;
+ }
  start(){
-  let previous=performance.now(),accumulator=0,lastPublish=0;this.running=true;
-  const frame=now=>{if(!this.running)return;const elapsed=Math.min(.05,(now-previous)/1000);previous=now;if(!document.hidden){accumulator+=elapsed;while(accumulator>=STEP){this.step();accumulator-=STEP;}if(now-lastPublish>1000/30){this.publish();lastPublish=now;}}else{accumulator=0;this.input={};}this.frameId=requestAnimationFrame(frame);};
+  let previous=performance.now();this.running=true;
+  const frame=now=>{if(!this.running)return;const elapsed=(now-previous)/1000;previous=now;if(!document.hidden)this.advance(elapsed);else{this.clock.reset();this.input={};}this.frameId=requestAnimationFrame(frame);};
   this.frameId=requestAnimationFrame(frame);
  }
  dispose(){this.running=false;if(this.frameId)cancelAnimationFrame(this.frameId);this.world.free();this.listeners.clear();}

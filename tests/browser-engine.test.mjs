@@ -31,3 +31,16 @@ test('AI scores in a full quick match without creating extra game pieces',async(
 test('standalone runtime explicitly refuses Java execution',async()=>{
  const e=await create();try{const messages=[];e.subscribe(m=>messages.push(m));e.send({type:'opmode.start'});assert.match(messages.at(-1).text,/desktop edition/);assert.equal(e.snapshot().arena.java,false);}finally{e.dispose();}
 });
+
+test('display refresh rate does not change the simulated driving trajectory',async()=>{
+ const results=[];
+ for(const fps of [30,60,144]){const e=await create();try{run(e,.4);input(e,{forward:1,turn:.3});for(let i=0;i<fps*.5;i++)e.advance(1/fps);results.push(e.snapshot().arena.bots[0]);}finally{e.dispose();}}
+ for(const b of results.slice(1))for(let i=0;i<3;i++)assert.ok(Math.abs(b.p[i]-results[0].p[i])<1e-5);
+});
+test('neutral input brakes promptly and diagonal drive has the same speed limit',async()=>{
+ const e=await create();try{
+  run(e,.4);input(e,{forward:.6,strafe:.6});run(e,.3);input(e,{});run(e,.5);assert.ok(e.snapshot().arena.bots[0].speed<.08);
+  const b=e.bots[0];b.body.setTranslation({x:1,y:.11,z:0},true);b.body.setLinvel({x:0,y:0,z:0},true);b.body.setRotation({x:0,y:Math.sin(Math.PI/8),z:0,w:Math.cos(Math.PI/8)},true);
+  input(e,{forward:1,strafe:1});run(e,.5);assert.ok(e.snapshot().arena.bots[0].speed<=presets[0].speed+.02);
+ }finally{e.dispose();}
+});
