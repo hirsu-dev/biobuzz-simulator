@@ -52,7 +52,7 @@ The local desktop integration was built around [FTCSim](https://github.com/Wheat
 
 ## Validation
 
-Eight automated checks cover all ten presets, finite pieces, drive types, wall collisions, ballistic shots, intake/ejection, pause and input reset, full-match timing, autonomous input blocking, AI scoring, and explicitly refusing unsupported Java execution. Phone-sized landscape and portrait layouts and pointer controls were checked in a desktop browser. Physical iPhone/Android multitouch and sustained mobile performance have not been device-tested.
+Automated checks cover all ten presets, finite pieces, drive types, wall collisions, ballistic shots, intake/ejection, pause and input reset, full-match timing, autonomous input blocking, AI scoring, and explicitly refusing unsupported Java execution. Phone-sized landscape and portrait layouts and pointer controls were checked in a desktop browser. Physical iPhone/Android multitouch and sustained mobile performance have not been device-tested.
 
 ## Third-party software
 
