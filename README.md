@@ -46,7 +46,7 @@ The ten presets are Atlas Turret, REV DUO, goBILDA Starter, AndyMark Robits, Stu
 
 Rapier simulates rigid-body gravity, collisions, friction and projectiles at 120 Hz. Chassis use box colliders; wheel traction, intake capture, hive tipping, flower storage and scoring are simplified. The seeded starting layout, dynamics and AI are estimates. This is a practice tool, not an official scorer or a calibrated replacement for testing a physical robot. The displayed score includes projected achievements; penalties and referee decisions are not fully modeled.
 
-[Rebuild Simulator](https://rebuildsim.com/) inspired the flat-shaded field, minimal HUD and touch layout. [MoSim](https://mosimulator.com/) inspired driver practice and robot selection. No Rebuild or MoSim code, branding, models or audio assets are included. This is singleplayer; multiplayer, rankings and accounts are not implemented.
+[Rebuild Simulator](https://rebuildsim.com/) inspired the title screen, right-side main menu, full-screen singleplayer setup with robot preview and stat bars, settings, minimal HUD and touch layout. The interface is recreated with original BIOBUZZ geometry and an openly licensed Silkscreen font. Rebuild’s author describes a C++/WebAssembly implementation at [salvobonsma.com](https://salvobonsma.com/); its engine and asset source were not found publicly released during this update. This website continues to use Rapier and does not claim matching physics. [MoSim](https://mosimulator.com/) inspired driver practice and robot selection. No Rebuild or MoSim code, branding, models or audio assets are included. This is singleplayer; multiplayer, rankings and accounts are not implemented.
 
 The local desktop integration was built around [FTCSim](https://github.com/WheatleyFromPortal2/FTCSim). The public web edition uses its own browser engine and does not distribute FTCSim source. [FIRST BIOBUZZ resources](https://ftc-resources.firstinspires.org/ftc/archive/2027/game) informed the field concept. This project is independent and is not endorsed by FIRST or the referenced vendors.
 
@@ -56,4 +56,4 @@ Eight automated checks cover all ten presets, finite pieces, drive types, wall c
 
 ## Third-party software
 
-Three.js (MIT), Lucide (ISC), and Rapier (Apache-2.0) are bundled. Their license texts are included under `frontend/public/licenses/` and served with the site. Fonts may load from Google Fonts with system fallbacks. See `THIRD_PARTY_NOTICES.md`.
+Three.js (MIT), Lucide (ISC), and Rapier (Apache-2.0) are bundled. Their license texts are included under `frontend/public/licenses/` and served with the site. Silkscreen is bundled under the SIL Open Font License in `frontend/public/fonts/OFL.txt`. Other editor fonts may load from Google Fonts with system fallbacks. See `THIRD_PARTY_NOTICES.md`.

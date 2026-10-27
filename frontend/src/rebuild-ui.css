@@ -1,0 +1,149 @@
+@font-face{font-family:Silkscreen;src:url('../public/fonts/Silkscreen-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+:root{--game-font:Silkscreen,'Courier New',monospace;--gold:#f2d52e;--game-bg:#111216}
+.game-button{font-weight:400;border-radius:0;background:#15161bdb;font-size:18px;letter-spacing:0;padding:12px 18px}
+.game-button:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.game-button:disabled{opacity:.35;cursor:default}
+.game-button.accent{background:#f2d52e;color:#171717}
+body[data-workspace=play] #viewport{height:100dvh;min-height:0}
+body[data-workspace=play] .viewport-footer{display:none}
+body[data-workspace=play] .topbar{position:absolute;top:max(10px,env(safe-area-inset-top));right:max(16px,env(safe-area-inset-right));height:32px;z-index:9;padding:0;border:0;background:none}
+body[data-workspace=play] .wordmark,body[data-workspace=play] .top-actions{display:none}
+body[data-workspace=play] .workspace-tabs{margin:0;gap:8px}
+body[data-workspace=play] .workspace-tabs button{font:10px var(--game-font);padding:0 9px;background:#15161bcf;border:1px solid #555964;color:#c6c8ce}
+body[data-workspace=play] .workspace-tabs button[aria-selected=true]{border-color:var(--gold);color:var(--gold)}
+body[data-workspace=play] .workspace-tabs svg{width:13px;height:13px}
+body[data-workspace=play] .play-overlay{display:block;padding:0;background:linear-gradient(0deg,#090b0edb,transparent 75%);overflow:auto;overscroll-behavior:contain}
+.title-screen,.home-screen,.setup-screen,.replays-screen,#pauseMenuHost{display:none}
+body[data-menu-screen=splash] .title-screen{display:block;position:absolute;inset:0;width:100%;text-align:right;color:var(--gold);background:transparent}
+.title-lockup{position:absolute;right:5vw;bottom:9vh;display:flex;flex-direction:column;align-items:flex-end;font:clamp(20px,3.4vw,52px)/1.1 var(--game-font);letter-spacing:1px;text-shadow:0 2px 12px #0008}
+.title-lockup strong{font:clamp(58px,11vw,158px)/1.05 var(--game-font);letter-spacing:-5px}
+.title-lockup>span:last-child{color:#f3f3f5;margin-right:3px;letter-spacing:6px}
+.title-lockup .continue-prompt{font:clamp(11px,1.4vw,19px) var(--game-font);color:#e5e5e8;margin:0 4px 24px}
+.title-screen .version-chip{position:absolute;bottom:18px;left:20px;border:0;padding:0;font:9px var(--game-font);color:#b6b7bd}
+body[data-menu-screen=home] .home-screen{position:absolute;right:3.2vw;top:50%;transform:translateY(-47%);width:330px;max-width:85vw;display:flex;flex-direction:column;gap:10px}
+.home-lockup{font:42px/1 var(--game-font);color:var(--gold);text-align:center;margin-bottom:16px}
+.home-lockup span{display:block;color:#e1e1e6;font-size:16px;letter-spacing:3px;margin-top:7px}
+.home-screen .game-button{font-size:25px;padding:11px 8px;min-height:48px;border-color:#858995}
+.home-caption{font:9px var(--game-font);text-align:center;color:#b5b7c1;margin-top:8px}
+body[data-menu-screen=setup] .play-overlay,body[data-menu-screen=replays] .play-overlay{background:var(--game-bg)}
+body[data-menu-screen=setup] .setup-screen{display:flex;flex-direction:column;min-height:100%;padding:58px 24px 18px;gap:16px}
+.setup-screen h1,.replays-screen h1,.inspector-heading{font:38px/1.2 var(--game-font);text-align:center;letter-spacing:0;margin:0 0 8px;color:#efeff4}
+.setup-columns{display:grid;grid-template-columns:minmax(320px,.85fr) minmax(300px,1.15fr);gap:24px;flex:1;min-height:300px}
+.setup-robot{min-width:0;display:flex;flex-direction:column;justify-content:center}
+.setup-alliance{display:flex;justify-content:space-between;align-items:center;font:14px var(--game-font);margin-bottom:12px;gap:10px}
+.setup-alliance>span{color:#c0c1c7;font-size:10px}
+.red-text{color:#e66a74}.blue-text{color:#6795ea}
+.setup-slots{margin-bottom:12px}
+.slot-selector button{border-radius:0!important;font-family:var(--game-font)!important}
+body[data-workspace=play] select{border-radius:0;background:#17181e;border:1px solid #626572;color:#e6e6ec;font:12px var(--game-font)}
+#setupRobot{width:100%;padding:12px;text-align:center;font-size:16px}
+.robot-details{display:grid;grid-template-columns:1fr 1fr;align-items:center;min-height:210px;flex:1;gap:14px}
+#robotPreview{height:100%;min-height:200px;min-width:0;position:relative}
+#robotPreview canvas{position:absolute;width:100%;height:100%;inset:0}
+#robotStats{display:grid;gap:12px}
+.robot-stat>div:first-child{display:flex;justify-content:space-between;gap:6px;font:9px var(--game-font);color:#d4d5db;margin-bottom:5px}
+.robot-stat b{font-weight:400;font-size:8px;color:#9da0ab}
+.stat-track{height:12px;background:#30313b}
+.stat-track i{display:block;height:100%}.stat-track .gold{background:#d9cb7f}.stat-track .green{background:#8ac196}.stat-track .red{background:#c78184}
+.robot-caption{text-align:center;font:12px var(--game-font);color:#e2e2e8;display:grid;gap:5px;margin-top:4px}
+.robot-caption span{font:10px var(--game-font);color:#989da9}
+.setup-map{display:flex;align-items:center;justify-content:center;flex-direction:column;background:#16171d;border:1px solid #373943;min-height:300px;padding:14px}
+#setupFieldMap{width:100%;height:min(46vh,380px);min-height:240px}
+#setupFieldMap [data-map-slot]{cursor:pointer;outline:none}
+#setupFieldMap [data-map-slot]:focus rect{stroke:white;stroke-width:4}
+.setup-map p{font:9px var(--game-font);color:#969ca9;margin:10px 0 0;text-align:center}
+.setup-only{display:none}.pause-only{display:block}
+body[data-menu-screen=setup] .setup-only{display:block}
+body[data-menu-screen=setup] .pause-only{display:none}
+#setupMenuHost .play-menu{width:100%;display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+#setupMenuHost #matchSetup{grid-column:1/-1;display:flex;gap:18px}
+#setupMenuHost #matchSetup>label{flex:1;margin:0}
+#setupMenuHost #matchSetup>label select{padding:9px}
+#setupMenuHost #javaSelections{flex:1;margin:0;max-width:50%}
+#setupMenuHost .play-menu>h2,#setupMenuHost .play-menu>p,#setupMenuHost #menuEyebrow,#setupMenuHost #resumeGame,#setupMenuHost #watchReplay,#setupMenuHost #matchResult{display:none!important}
+#setupMenuHost .game-button{font-size:13px;padding:12px 8px}
+#setupMenuHost #beginGame{order:10}#setupMenuHost #freeDrive{order:9}
+#setupMenuHost #menuGarage{font-size:12px}
+body[data-menu-screen=pause] #pauseMenuHost,body[data-menu-screen=result] #pauseMenuHost{display:block;max-width:400px;width:calc(100% - 40px);margin:70px auto 30px}
+#pauseMenuHost .play-menu{width:100%;padding:24px;background:#111216ed;border:1px solid #4a4d58;gap:10px}
+#pauseMenuHost #matchSetup{display:none}
+#pauseMenuHost .play-menu h2{font-size:25px;line-height:1.3;color:var(--gold)}
+#pauseMenuHost .play-menu>p{font-family:system-ui,sans-serif;font-size:13px;line-height:1.5}
+#pauseMenuHost .game-button{font-size:16px;padding:10px}
+body[data-menu-screen=replays] .replays-screen{display:flex;flex-direction:column;gap:30px;padding:65px 24px 24px;min-height:100%;align-items:center}
+.replay-card{border-top:1px solid #444650;border-bottom:1px solid #444650;padding:32px 0;width:600px;max-width:100%;margin:auto 0}
+.replay-card h2{font:24px var(--game-font);margin:20px 0}.replay-card p{color:#a8abb7;margin-bottom:24px}
+#replaysBack{width:260px}
+body[data-workspace=play] .scoreboard{top:10px;background:#131419bc;border:1px solid #5c5e6a;align-items:center}
+body[data-workspace=play] .alliance{min-width:88px;padding:6px 10px;gap:10px}
+body[data-workspace=play] .alliance strong,body[data-workspace=play] .match-clock strong{font-size:25px}
+body[data-workspace=play] .alliance span{font-size:11px}
+body[data-workspace=play] .match-clock{padding:6px 13px;gap:2px}
+body[data-workspace=play] .match-clock span{font-size:8px}
+body[data-workspace=play] .play-top{inset:10px auto auto 16px;gap:7px}
+.play-top .game-button.compact{font-size:9px;padding:9px 10px}
+#controlBadge{display:none}
+body[data-workspace=play] .viewport-bar{top:53px;right:16px;height:28px}
+body[data-workspace=play] .viewport-bar select{font-size:9px;padding:5px}
+body[data-workspace=play] .viewport-bar #pause,body[data-workspace=play] .viewport-bar #step,body[data-workspace=play] .viewport-bar .divider{display:none}
+body[data-workspace=play] .play-bottom{inset:auto 24px 23px}
+#playInventory{font-size:13px}#playStatus{font-size:18px}
+.play-keyboard{gap:24px}.play-keyboard span{font-size:10px}
+body[data-workspace=play] .game-event{top:90px;font-size:11px}
+body.touch-controls[data-workspace=play] .play-bottom{inset:58px auto auto 18px}
+body[data-workspace=play] .inspector{position:fixed;inset:0;width:100%;max-width:none;padding:58px max(24px,calc((100vw - 620px)/2)) 90px;background:var(--game-bg);box-shadow:none;border:0;z-index:11}
+.inspector-heading,.settings-tabs,.input-settings,#saveSettings{display:none}
+body[data-workspace=play] .inspector-heading{display:block;margin-bottom:32px}
+body[data-workspace=play] #closeGarage{position:fixed;top:12px;left:16px;width:auto;margin:0;font-size:11px;padding:8px 18px}
+body[data-workspace=play] .inspector section{border:0;padding:22px 0;background:none}
+body[data-workspace=play] .inspector h2{font:17px var(--game-font);margin:8px 0 24px}
+body[data-workspace=play] .inspector .section-title{border-bottom:1px solid #444650}
+body[data-workspace=play] .inspector label,body[data-workspace=play] .inspector .field-row{font-size:14px;color:#d1d2da}
+body[data-workspace=play] .inspector input[type=range]{margin:12px 0 26px;accent-color:var(--gold)}
+body[data-workspace=play] .inspector input[type=checkbox]{accent-color:var(--gold)}
+body[data-workspace=play] .inspector .visual-settings{gap:30px}
+body[data-workspace=play] .inspector .visual-settings select{width:200px;font-size:11px}
+body[data-workspace=play] .settings-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px}
+.settings-tabs button{border:1px solid #6b6d7a;padding:12px 6px;font:13px var(--game-font);color:#989ca8}
+.settings-tabs button[aria-selected=true]{color:var(--gold);border-color:var(--gold);background:#24231d}
+body[data-workspace=play][data-panel=settings] #saveSettings{display:block;position:fixed;bottom:max(20px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:280px;box-shadow:0 0 20px #111216}
+body[data-workspace=play][data-panel=settings] .garage{display:none}
+body[data-workspace=play][data-panel=garage] .settings-tabs,body[data-workspace=play][data-panel=garage] .session-section,body[data-workspace=play][data-panel=garage] .visual-settings,body[data-workspace=play][data-panel=garage] .input-settings{display:none}
+body[data-workspace=play][data-panel=garage] .inspector{padding-left:6vw;padding-right:6vw}
+body[data-workspace=play] .robot-grid{grid-template-columns:repeat(5,1fr);gap:18px}
+body[data-workspace=play] .robot-card{border-radius:0;padding:18px 12px;background:#1a1b22;border-color:#474955}
+body[data-workspace=play] .robot-card.selected{border-color:var(--gold);background:#28271e}
+body[data-workspace=play] .robot-card b{font:12px var(--game-font);color:#e7e7eb}
+body[data-workspace=play] .robot-card svg{height:100px;width:100%}
+body[data-workspace=play][data-settings-tab=general] .visual-settings,body[data-workspace=play][data-settings-tab=general] .input-settings,body[data-workspace=play][data-settings-tab=graphics] .session-section,body[data-workspace=play][data-settings-tab=graphics] .input-settings,body[data-workspace=play][data-settings-tab=input] .session-section,body[data-workspace=play][data-settings-tab=input] .visual-settings{display:none}
+body[data-workspace=play][data-panel=settings][data-settings-tab=input] .input-settings{display:block}
+.input-settings p{font:13px/1.7 system-ui,sans-serif;color:#999eac}
+.key-bindings{display:grid;grid-template-columns:1fr 1.5fr;gap:18px;font:11px var(--game-font);margin:30px 0}.key-bindings dd{margin:0;color:#bfc0c9;text-align:right}
+@media(max-width:900px){
+ .setup-columns{grid-template-columns:1fr 1fr;gap:18px}.robot-details{grid-template-columns:1fr;gap:0}#robotPreview{min-height:130px;height:130px}#robotStats{gap:7px}.stat-track{height:8px}
+ .home-screen .game-button{font-size:21px;padding:10px}.home-lockup{font-size:38px}
+ body[data-workspace=play] .robot-grid{grid-template-columns:repeat(3,1fr)}
+ body[data-workspace=play] .alliance{min-width:60px}.scoreboard .alliance span{display:none}
+ body[data-workspace=play] .workspace-tabs svg{display:none}.play-top .game-button.compact{font-size:8px;padding:9px 7px}
+}
+@media(max-width:600px){
+ .title-lockup{bottom:18vh;right:6vw}.title-lockup strong{font-size:15vw;letter-spacing:-3px}.title-lockup>span:last-child{font-size:6vw;letter-spacing:3px}
+ body[data-menu-screen=home] .home-screen{right:8vw;width:84vw;transform:translateY(-44%);gap:12px}.home-lockup{font-size:42px;margin-bottom:20px}
+ .setup-screen h1,.replays-screen h1,.inspector-heading{font-size:25px}
+ body[data-menu-screen=setup] .setup-screen{padding:65px 16px 24px}.setup-columns{display:flex;flex-direction:column;gap:20px}.robot-details{grid-template-columns:1fr 1fr;min-height:180px}#robotPreview{height:180px;min-height:180px}
+ #setupMenuHost #matchSetup{flex-direction:column;gap:12px}#setupMenuHost #javaSelections{max-width:none}#setupMenuHost .play-menu{grid-template-columns:repeat(2,1fr)}#setupMenuHost #beginGame{grid-column:1/-1;order:0}#setupMenuHost #freeDrive{order:0}#setupMenuHost #setupBack{order:10}
+ .setup-map{min-height:0}#setupFieldMap{height:270px}.robot-stat>div:first-child{font-size:8px}.setup-alliance{font-size:12px}
+ body[data-workspace=play] .topbar{right:10px;top:10px}.workspace-tabs button{font-size:8px!important;padding:0 7px!important}
+ body[data-workspace=play] .play-top{left:10px;gap:5px}#playGarage{display:none}
+ body[data-workspace=play] .scoreboard{top:53px}body[data-workspace=play] .viewport-bar{top:115px;right:10px}body[data-workspace=play] .game-event{top:154px;width:max-content;max-width:95%;font-size:9px;text-align:center}
+ body.touch-controls[data-workspace=play] .play-bottom{inset:122px auto auto 12px}#playInventory{font-size:8px!important}#playStatus{font-size:10px!important}
+ body[data-workspace=play] .inspector{padding:68px 20px 95px}body[data-workspace=play] .inspector-heading{margin-bottom:30px}
+ body[data-workspace=play] .robot-grid{grid-template-columns:repeat(2,1fr);gap:12px}body[data-workspace=play] .robot-card{padding:12px 8px}body[data-workspace=play] .robot-card b{font-size:10px}
+ .settings-tabs button{font-size:10px}.key-bindings{font-size:9px}.touch-actions button{font-size:11px}.touch-actions .touch-shoot{font-size:16px}
+}
+@media(orientation:landscape) and (max-height:600px){
+ body[data-menu-screen=home] .home-screen{top:55px;bottom:16px;transform:none;overflow:auto;gap:6px;width:280px}.home-lockup{font-size:30px;margin:0 0 7px}.home-lockup span{font-size:12px}.home-screen .game-button{font-size:15px;padding:7px;min-height:32px}.home-caption{font-size:8px}
+ body[data-menu-screen=setup] .setup-screen{padding-top:56px}.setup-screen h1{font-size:26px}.setup-columns{min-height:290px}.robot-details{grid-template-columns:1fr 1fr}#robotStats{gap:12px}
+ body[data-workspace=play] .play-top{left:10px}.play-top #playGarage{display:none}body[data-workspace=play] .topbar{right:10px}body[data-workspace=play] .workspace-tabs button{font-size:8px}
+ body[data-workspace=play] .play-bottom{inset:56px auto auto 12px}#playStatus{display:none}#playInventory{font-size:10px}.play-keyboard{display:none}.touch-actions .touch-shoot{font-size:15px}
+}

@@ -1,17 +1,18 @@
 import './style.css';
 import './play.css';
 import './touch.css';
+import './rebuild-ui.css';
 import {createTouchControls} from './touch.js';
 import {createPlayController} from './play.js';
 import {createIcons,Box,Bot,Code2,SlidersHorizontal,CircleHelp,ArrowUpRight,Download,RotateCcw,Pause,StepForward,Maximize2,Mouse,Activity,FileCode2,Terminal,Upload,Save,Play,Square,Gamepad2,X} from 'lucide';
-import {createScene,robotThumbnail} from './scene.js';
+import {createScene,createRobotPreview,robotThumbnail} from './scene.js';
 
 const $=id=>document.getElementById(id);
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const iconify=()=>createIcons({icons:{Box,Bot,Code2,SlidersHorizontal,CircleHelp,ArrowUpRight,Download,RotateCcw,Pause,StepForward,Maximize2,Mouse,Activity,FileCode2,Terminal,Upload,Save,Play,Square,Gamepad2,X},attrs:{'stroke-width':1.7}});
 let ws,scene,state,play,presets=[],opmodes=[],selectedSlot=0,sourcePath='',dirty=false,logs=[],sessionEvents=[],lastEvent='',lastTelemetry=0,aim=0;
 const hosted=import.meta.env.MODE==='web';
-let browserEngine,browserRequest,touch;
+let browserEngine,browserRequest,touch,robotPreview,settingsRestored=false;
 let audioContext;
 function sound(kind){if(!$('soundEnabled')?.checked)return;try{audioContext??=new AudioContext();audioContext.resume();const oscillator=audioContext.createOscillator(),gain=audioContext.createGain();oscillator.connect(gain);gain.connect(audioContext.destination);oscillator.frequency.setValueAtTime(kind==='finish'?440:kind==='start'?880:660,audioContext.currentTime);gain.gain.setValueAtTime(.055,audioContext.currentTime);gain.gain.exponentialRampToValueAtTime(.001,audioContext.currentTime+.2);oscillator.start();oscillator.stop(audioContext.currentTime+.22);}catch{}}
 let keys=new Set(),connected=false,lastBuild='',reconnectTimer,toastTimer,sourceFiles=[],sourcesReady=false;
@@ -32,7 +33,7 @@ function receive(m){
  if(m.type==='buildStatus')buildStatus(m.build);
  if(m.type==='toast')toast(m.text,m.level==='error');
  if(m.type==='log')for(const item of m.entries||[])log(`[${item.level}] ${item.tag||''} ${item.message||item.msg||''}${item.stack?'\n'+item.stack:''}`);
- if(m.type==='state'){state=m;updateState(m);}
+ if(m.type==='state'){state=m;updateState(m);if(!settingsRestored&&play){settingsRestored=true;play.restoreSettings();}}
 }
 function buildStatus(b){if(!b)return;play?.build(b);const status=b.building?'Compiling Java…':b.sourcesChanged?'Sources changed · save & compile to reload':b.summary||'Ready';$('buildStatus').textContent=status;$('buildStatus').className=b.building?'':b.success?'good':'error';if(!b.building&&b.summary&&b.summary!==lastBuild){lastBuild=b.summary;log(`BUILD: ${b.summary}`);for(const d of b.diagnostics||[])log(`${d.kind} ${d.file}:${d.line}\n${d.message}`);$('errorCount').textContent=(b.diagnostics||[]).filter(d=>d.kind==='ERROR').length||'';}}
 function renderGarage(){
@@ -78,7 +79,7 @@ $('pause').onclick=()=>{releaseControls();send({type:'sim.pause',paused:!state?.
 $('reset').onclick=async()=>{try{await stopAndWait();send({type:'sim.pause',paused:false});arena('reset',{seed:Number($('seed').value)||6829});}catch(e){toast(e.message,true);}};
 $('practice').onclick=()=>arena('practice');$('match').onclick=async()=>{try{await stopAndWait();send({type:'sim.pause',paused:false});arena('match');toast('30 s autonomous, 8 s transition, 2 min TeleOp. INIT / START your autonomous OpMode.');}catch(e){toast(e.message,true);}};
 $('ai').onchange=()=>arena('ai',{enabled:$('ai').checked});$('camera').onchange=()=>scene?.setCamera($('camera').value);
-$('fullscreen').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else $('viewport').requestFullscreen().catch(e=>toast(e.message,true));};
+$('fullscreen').onclick=()=>{if(document.fullscreenElement)document.exitFullscreen();else (document.body.dataset.workspace==='play'?$('app'):$('viewport')).requestFullscreen().catch(e=>toast(e.message,true));};
 $('power').oninput=()=>$('powerValue').textContent=`${$('power').value}%`;$('elevation').oninput=()=>{const p=presets[state?.arena?.bots[0].preset||0];$('hoodValue').textContent=`${Math.round(p.shotAngle+(Number($('elevation').value)/100-.5)*35)}°`;};
 document.querySelectorAll('[data-slot]').forEach(btn=>btn.onclick=()=>{selectedSlot=Number(btn.dataset.slot);document.querySelectorAll('[data-slot]').forEach(b=>b.classList.toggle('active',b===btn));renderGarage();});
 function panel(name){document.querySelectorAll('.panel-tab').forEach(b=>b.classList.toggle('active',b.dataset.panel===name));document.querySelectorAll('.panel-content').forEach(p=>p.classList.toggle('hidden',p.id!==`panel-${name}`));}
@@ -108,12 +109,12 @@ setInterval(()=>{
  const t=active?touch?.sample():null;if(t){for(const key of ['lx','ly','rx'])if(Math.abs(t[key])>.01)gp[key]=t[key];for(const key of ['a','b','lb','rb'])gp[key]||=t[key];gp.rt=Math.max(gp.rt,t.rt);}
  $('gamepadStatus').textContent=pads[0]?`Controller: ${pads[0].id.slice(0,30)}`:'Keyboard ready · click field to drive';
  send({type:'gamepad',id:1,state:gp});aim+=((gp.dr?1:0)-(gp.dl?1:0))*.04;aim=Math.max(-Math.PI,Math.min(Math.PI,aim));
- arena('input',{forward:-gp.ly,strafe:gp.lx,turn:gp.rx,intake:gp.rb,shoot:gp.a,eject:gp.lb,extract:gp.b,aim,assist:$('aimAssist').checked,power:Number($('power').value)/100,elevation:Number($('elevation').value)/100});
+ arena('input',{forward:-gp.ly*Number($('driveSensitivity').value)/100,strafe:gp.lx*Number($('driveSensitivity').value)/100,turn:gp.rx*Number($('turnSensitivity').value)/100,intake:gp.rb,shoot:gp.a,eject:gp.lb,extract:gp.b,aim,assist:$('aimAssist').checked,power:Number($('power').value)/100,elevation:Number($('elevation').value)/100});
 },40);
 async function boot(){try{
  if(hosted){document.body.classList.add('browser-engine');const [{createBrowserEngine},{createBrowserProject},{default:catalog}]=await Promise.all([import('./browser-engine.js'),import('./browser-project.js'),import('../data/robots.json')]);browserEngine=await createBrowserEngine(catalog);browserRequest=createBrowserProject(catalog);$('saveCode').textContent='Save draft';$('configure').textContent='Robot model notes';$('playControl').querySelector('[value=java]').remove();$('playControl').options[0].textContent='Touch / keyboard / controller';document.querySelector('.version-chip').textContent='BROWSER SINGLEPLAYER / 10 ROBOTS';document.querySelector('.app-footer>span:nth-child(2)').textContent='Browser physics · Rapier 3D · Three.js';$('opmode').replaceChildren(new Option('Desktop edition required',''));$('stationNote').textContent='Java execution requires the desktop edition.';}
- presets=await(await request('/api/robots')).json();renderGarage();scene=createScene($('viewport'),presets,fps=>$('fps').textContent=`${fps} FPS`);touch=createTouchControls();play=createPlayController({scene:()=>scene,presets:()=>presets,send,arena,stop:stopAndWait,release:releaseControls,dirty:()=>dirty,toast,sound});$('camera').value='broadcast';scene.setCamera('broadcast');if(touch.enabled()){$('quality').value='low';scene.setQuality('low');}$('quality').onchange=()=>scene.setQuality($('quality').value);$('showTrail').onchange=()=>scene.setTrail($('showTrail').checked);connect();await loadSources();
- if(hosted){$('help').onclick=$('notes').onclick=()=>modal('Phone controls & browser edition','<h3>Touch controls</h3><p>Drag the left pad to drive. Drag the right slider to turn. Hold SHOOT to launch, tap INTAKE to toggle collection, and hold EJECT to empty the robot. Rotate your phone sideways for a larger field. Use Robots & settings to select among ten designs or change graphics quality.</p><h3>Code testing</h3><p>Play runs entirely on this device with Rapier 3D physics. This website can save and download Java drafts; actual FTC SDK compilation and OpMode execution require the desktop edition. GitHub Pages cannot run the Java server.</p><h3>Simulation boundaries</h3><p>Models are original simplified geometry with estimated dynamics. Ten presets represent common mechanisms, not every existing BIOBUZZ team robot. Intake, hive capture/tipping and scoring are approximations. AI is for practice; this is not an official scorer.</p><p>Rebuild and MoSim inspired the driver practice layout. No Rebuild models or source code are included. See the <a href="https://github.com/hrushikbarani-hub/biobuzz-simulator#readme" target="_blank" rel="noreferrer">project README</a> for sources and limitations.</p>');}
+ presets=await(await request('/api/robots')).json();renderGarage();scene=createScene($('viewport'),presets,fps=>$('fps').textContent=`${fps} FPS`);robotPreview=createRobotPreview($('robotPreview'),presets);touch=createTouchControls();play=createPlayController({selectedSlot:()=>selectedSlot,preview:(index,slot)=>robotPreview.update(index,slot),scene:()=>scene,presets:()=>presets,send,arena,stop:stopAndWait,release:releaseControls,dirty:()=>dirty,toast,sound});$('camera').value='broadcast';scene.setCamera('broadcast');if(touch.enabled()){$('quality').value='low';scene.setQuality('low');}$('quality').onchange=()=>scene.setQuality($('quality').value);$('showTrail').onchange=()=>scene.setTrail($('showTrail').checked);connect();await loadSources();
+ if(hosted){$('help').onclick=$('notes').onclick=()=>modal('Phone controls & browser edition','<h3>Touch controls</h3><p>Drag the left pad to drive. Drag the right slider to turn. Hold SHOOT to launch, tap INTAKE to toggle collection, and hold EJECT to empty the robot. Rotate your phone sideways for a larger field. Use Robots on the main menu to choose among ten designs. Settings controls graphics, sound and manual drive sensitivity.</p><h3>Code testing</h3><p>Play runs entirely on this device with Rapier 3D physics. This website can save and download Java drafts; actual FTC SDK compilation and OpMode execution require the desktop edition. GitHub Pages cannot run the Java server.</p><h3>Simulation boundaries</h3><p>Models are original simplified geometry with estimated dynamics. Ten presets represent common mechanisms, not every existing BIOBUZZ team robot. Intake, hive capture/tipping and scoring are approximations. AI is for practice; this is not an official scorer.</p><p>Rebuild and MoSim inspired the driver practice layout. No Rebuild models or source code are included. See the <a href="https://github.com/hrushikbarani-hub/biobuzz-simulator#readme" target="_blank" rel="noreferrer">project README</a> for sources and limitations.</p>');}
  }catch(e){$('loading').textContent=`Unable to start: ${e.message}`;log(e.stack||e.message);toast(e.message,true);}}
 boot();
 

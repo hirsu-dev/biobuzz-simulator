@@ -1,17 +1,22 @@
+import {createMenuUI} from './menu-ui.js';
 const $=id=>document.getElementById(id);
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-const timeLabel=n=>`${Math.floor(n/60)}:${String(Math.floor(n%60)).padStart(2,'0')}`;
+const timeLabel=value=>{const n=Math.max(0,Math.floor(value));return `${Math.floor(n/60)}:${String(n%60).padStart(2,'0')}`;};
 
 export function createPlayController(api) {
  let mode='play', menu=true, busy=false, active=false, token=0, phase='', latest, programs=[], build;
  let javaMatch=false, autoName='', teleName='', handoff=false, teleReady=false, event='', eventTimer, lastRecord=-1;
  let recording=[], replay=[], replayIndex=0, replaying=false, replayPaused=false, replayTimer, pausedBeforeReplay=false;
- let framesReset=-1;
+ let framesReset=-1,screen='splash',menuUI,panelWasPaused=true;
  const show=(id,visible)=>$(id).classList.toggle('hidden',!visible);
  const wait=async(predicate,timeout=7000)=>{const start=performance.now();while(performance.now()-start<timeout){if(predicate())return;await delay(40);}throw new Error(latest?.opmode.error||'The Java runtime did not become ready. Check Console in Code testing.');};
- function workspace(next){mode=next;document.body.dataset.workspace=next;document.body.classList.remove('garage-open');$('playTab').setAttribute('aria-selected',next==='play');$('codeTab').setAttribute('aria-selected',next==='code');api.release();$('camera').value=next==='play'?'broadcast':'orbit';api.scene()?.setCamera($('camera').value);if(next==='code')$('editor').focus();else $('viewport').focus();}
- function garage(){document.body.classList.add('garage-open');api.release();}
- function setMenu(value){menu=value;document.body.classList.toggle('menu-open',value);show('playOverlay',value);api.release();if(!value)$('viewport').focus();}
+ function workspace(next){closePanel();mode=next;document.body.dataset.workspace=next;document.body.classList.remove('garage-open');$('playTab').setAttribute('aria-selected',next==='play');$('codeTab').setAttribute('aria-selected',next==='code');api.release();$('camera').value=next==='play'?'broadcast':'orbit';api.scene()?.setCamera($('camera').value);api.scene()?.setPresentation(next==='play'&&menu&&['splash','home'].includes(screen)?'title':'game');if(next==='code')$('editor').focus();else $('viewport').focus();}
+ function garage(panel='garage'){if(!document.body.classList.contains('garage-open'))panelWasPaused=latest?.sim.paused??true;document.body.dataset.panel=panel;$('inspectorHeading').textContent=panel==='garage'?'ROBOTS':'SETTINGS';document.body.classList.add('garage-open');$('viewport').inert=true;$('closeGarage').focus();api.send({type:'sim.pause',paused:true});api.release();}
+ function closePanel(){if(!document.body.classList.contains('garage-open'))return;document.body.classList.remove('garage-open');$('viewport').inert=false;$('viewport').focus();if(!panelWasPaused&&!menu)api.send({type:'sim.pause',paused:false});api.release();}
+ function navigate(next){screen=next;document.body.dataset.menuScreen=next;const host=next==='setup'?$('setupMenuHost'):$('pauseMenuHost');host.append(document.querySelector('.play-menu'));setMenu(true);menuUI?.setup(latest);if(next==='setup'){$('beginGame').textContent='START MATCH';show('resumeGame',false);api.send({type:'sim.pause',paused:true});}}
+ function home(){closePanel();navigate('home');show('homeContinue',active);}
+ function replaysMenu(){navigate('replays');const end=replay.at(-1);$('replayLatest').disabled=replay.length<2;$('replaySummary').textContent=end?'RED '+end.score[0]+' — BLUE '+end.score[1]:'NO MATCH RECORDED';$('replayDescription').textContent=end?'Last completed match · '+timeLabel(end.time)+' · saved until you reload.':'Finish a match to watch it back here.';}
+ function setMenu(value){menu=value;document.body.classList.toggle('menu-open',value);show('playOverlay',value);api.scene()?.setPresentation(value&&mode==='play'&&['splash','home'].includes(screen)?'title':'game');api.release();if(!value)$('viewport').focus();}
  function ready(){return build?.success&&!build.building&&!build.sourcesChanged&&!api.dirty();}
  function selections(){
   for(const [id,flavor,empty] of [['autoProgram','AUTONOMOUS','No autonomous · wait for TeleOp'],['teleProgram','TELEOP','Select a TeleOp']]){
@@ -27,7 +32,7 @@ export function createPlayController(api) {
   if(latest.opmode.state!=='INIT')throw new Error(latest.opmode.error||'Java initialization failed.');
  }
  async function startJava(){api.send({type:'opmode.start'});await wait(()=>latest?.opmode.state==='RUNNING'||latest?.opmode.state==='IDLE'||latest?.opmode.state==='ESTOP');if(latest?.opmode.state==='ESTOP')throw new Error(latest.opmode.error||'Java stopped unexpectedly.');}
- function error(e){api.toast(e.message,true);show('countdown',false);busy=false;active=false;api.send({type:'sim.pause',paused:true});setMenu(true);$('menuTitle').textContent='CHECK YOUR PROGRAM';$('menuDescription').textContent=e.message;show('resumeGame',false);}
+ function error(e){api.toast(e.message,true);show('countdown',false);busy=false;active=false;api.send({type:'sim.pause',paused:true});navigate('pause');$('menuTitle').textContent='CHECK YOUR PROGRAM';$('menuDescription').textContent=e.message;show('resumeGame',false);}
  async function begin(practice=false){
   if(busy)return;
   const useJava=$('playControl').value==='java',full=$('playFormat').value==='full';
@@ -51,21 +56,21 @@ export function createPlayController(api) {
  function pauseMenu(){
   if(busy||replaying)return;
   if(menu&&active){resume();return;}
-  api.send({type:'sim.pause',paused:true});setMenu(true);show('resumeGame',active);$('menuTitle').textContent=active?'MATCH PAUSED':'ENTER THE ARENA';$('menuDescription').textContent=active?(document.body.classList.contains('browser-engine')?'Your field is paused. Resume when you are ready.':'Your field and Java program are paused together.'):'You + an AI teammate against two AI opponents.';show('matchResult',false);$('beginGame').textContent=active?'RESTART MATCH':'PLAY MATCH';
+  api.send({type:'sim.pause',paused:true});navigate(active?'pause':'setup');show('resumeGame',active);$('menuTitle').textContent=active?'MATCH PAUSED':'ENTER THE ARENA';$('menuDescription').textContent=active?(document.body.classList.contains('browser-engine')?'Your field is paused. Resume when you are ready.':'Your field and Java program are paused together.'):'You + an AI teammate against two AI opponents.';show('matchResult',false);$('beginGame').textContent=active?'RESTART MATCH':'PLAY MATCH';
  }
- function resume(){api.send({type:'sim.pause',paused:false});setMenu(false);}
- function finish(){active=false;replay=recording.slice();api.sound('finish');api.send({type:'sim.pause',paused:true});setMenu(true);show('resumeGame',false);show('watchReplay',replay.length>1);show('matchResult',true);$('menuEyebrow').textContent='MATCH COMPLETE';$('menuTitle').textContent=latest.arena.score[0]===latest.arena.score[1]?'ALLIANCES TIED':latest.arena.score[0]>latest.arena.score[1]?'RED ALLIANCE WINS':'BLUE ALLIANCE WINS';$('menuDescription').textContent='Final practice score · review the run or play again.';$('matchResult').innerHTML=`<span>RED ${latest.arena.score[0]}</span><span>BLUE ${latest.arena.score[1]}</span>`;$('beginGame').textContent='PLAY AGAIN';}
+ function resume(){closePanel();api.send({type:'sim.pause',paused:false});setMenu(false);}
+ function finish(){active=false;if(recording.at(-1)?.time!==latest.arena.time)recording.push(structuredClone(latest.arena));replay=recording.slice();api.sound('finish');api.send({type:'sim.pause',paused:true});navigate('result');show('resumeGame',false);show('watchReplay',replay.length>1);show('matchResult',true);$('menuEyebrow').textContent='MATCH COMPLETE';$('menuTitle').textContent=latest.arena.score[0]===latest.arena.score[1]?'ALLIANCES TIED':latest.arena.score[0]>latest.arena.score[1]?'RED ALLIANCE WINS':'BLUE ALLIANCE WINS';$('menuDescription').textContent='Final practice score · review the run or play again.';$('matchResult').innerHTML=`<span>RED ${latest.arena.score[0]}</span><span>BLUE ${latest.arena.score[1]}</span>`;$('beginGame').textContent='PLAY AGAIN';}
  async function transition(){
   handoff=true;const current=token;
   try{await initJava(teleName,current);if(active&&current===token)teleReady=true;}catch(e){if(current===token)error(e);}
  }
  function update(s){
-  latest=s;const a=s.arena;if(!a)return;
+  latest=s;const a=s.arena;if(!a)return;menuUI?.setup(s);
   $('controlBadge').textContent=a.java?'JAVA OPMODE':'DRIVER CONTROL';
   $('playInventory').textContent=`POLLEN / NECTAR  ${a.bots[0].held.length}/${api.presets()[a.bots[0].preset]?.capacity||4}`;
   $('playStatus').textContent=s.sim.paused?'PAUSED':a.phase==='AUTO'?'AUTONOMOUS':a.phase==='TRANSITION'?'DRIVER TRANSITION':a.ended?'MATCH OVER':a.java?'JAVA CONTROL':'DRIVE READY';
   $('javaLive').textContent=a.java?`${s.opmode.name||s.opmode.opModeName||'OpMode'} · ${s.opmode.runtime.toFixed(1)}s`:a.bots[0].speed.toFixed(2)+' m/s';
-  if(active&&a.resetId!==framesReset){active=false;recording=[];}
+  if(active&&a.resetId!==framesReset){active=false;recording=[];show('homeContinue',false);show('resumeGame',false);if(menu)navigate('setup');}
   if(active&&a.time-lastRecord>=.25){recording.push(structuredClone(a));lastRecord=a.time;if(recording.length>720)recording.shift();}
   if(active&&a.phase!==phase){phase=a.phase;api.sound('count');if(javaMatch&&phase==='TRANSITION'&&!handoff)transition();if(a.ended)finish();}
   if(active&&teleReady&&!s.sim.paused&&['TELEOP','ENDGAME'].includes(a.phase)){teleReady=false;const current=token;startJava().catch(e=>{if(current===token)error(e);});}
@@ -76,14 +81,15 @@ export function createPlayController(api) {
  function exitReplay(){clearInterval(replayTimer);replaying=false;show('replayBar',false);if(latest)api.scene().update(latest.arena);if(!pausedBeforeReplay)api.send({type:'sim.pause',paused:false});setMenu(true);}
  $('playTab').onclick=()=>workspace('play');$('codeTab').onclick=()=>{if(replaying)exitReplay();workspace('code');};
  $('editPlayCode').onclick=()=>workspace('code');$('gameMenu').onclick=pauseMenu;$('resumeGame').onclick=resume;
- $('beginGame').onclick=()=>begin();$('freeDrive').onclick=()=>begin(true);$('playGarage').onclick=garage;$('menuGarage').onclick=garage;$('closeGarage').onclick=()=>document.body.classList.remove('garage-open');
+ $('beginGame').onclick=()=>begin();$('freeDrive').onclick=()=>begin(true);$('playGarage').onclick=()=>garage('settings');$('menuGarage').onclick=()=>garage();$('closeGarage').onclick=closePanel;
  $('playControl').onchange=()=>show('javaSelections',$('playControl').value==='java');
- $('watchReplay').onclick=beginReplay;$('exitReplay').onclick=exitReplay;$('replayToggle').onclick=()=>{if(replayIndex===replay.length-1)replayIndex=0;replayPaused=!replayPaused;$('replayToggle').textContent=replayPaused?'Play replay':'Pause replay';};$('replaySeek').oninput=()=>{replayIndex=Math.round(Number($('replaySeek').value)/1000*(replay.length-1));paintReplay();};
+ $('watchReplay').onclick=$('replayLatest').onclick=beginReplay;$('exitReplay').onclick=exitReplay;$('replayToggle').onclick=()=>{if(replayIndex===replay.length-1)replayIndex=0;replayPaused=!replayPaused;$('replayToggle').textContent=replayPaused?'Play replay':'Pause replay';};$('replaySeek').oninput=()=>{replayIndex=Math.round(Number($('replaySeek').value)/1000*(replay.length-1));paintReplay();};
  $('runInPlay').onclick=async()=>{
   if(!ready()){api.toast('Save & compile your latest Java code first.',true);return;}
   try{api.send({type:'sim.pause',paused:false});if(latest?.opmode.state==='IDLE')await initJava($('opmode').value);if(latest?.opmode.state==='INIT')await startJava();if(latest?.opmode.state==='ESTOP')throw new Error(latest.opmode.error||'Stop the failed program before running again.');$('playControl').value='java';show('javaSelections',true);active=true;javaMatch=false;framesReset=latest.arena.resetId;recording=[];lastRecord=-1;workspace('play');setMenu(false);api.toast('Your Java OpMode is running in Play. Switch tabs anytime.');}catch(e){error(e);}
  };
- window.addEventListener('keydown',e=>{if(mode!=='play'||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)||$('modal').open)return;if(e.key==='Escape'){e.preventDefault();if(document.body.classList.contains('garage-open'))document.body.classList.remove('garage-open');else pauseMenu();}if(e.key==='Tab'&&!menu){e.preventDefault();const cameras=['broadcast','driver','follow','top','orbit'];$('camera').value=cameras[(cameras.indexOf($('camera').value)+1)%cameras.length];api.scene()?.setCamera($('camera').value);}});
- workspace('play');setMenu(true);
- return {update,programs(list,b){programs=list;selections();if(b)statusBuild(b);},build:statusBuild,workspace,blocked:()=>mode==='play'&&(menu||busy||replaying||document.body.classList.contains('garage-open')),replaying:()=>replaying};
+ window.addEventListener('keydown',e=>{if(mode!=='play'||['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)||$('modal').open)return;if(menu&&screen==='splash'){e.preventDefault();home();return;}if(e.key==='Escape'){e.preventDefault();if(document.body.classList.contains('garage-open'))closePanel();else if(menu&&!active)home();else pauseMenu();}if(e.key==='Tab'&&!menu&&!document.body.classList.contains('garage-open')&&!replaying){e.preventDefault();const cameras=['broadcast','driver','follow','top','orbit'];$('camera').value=cameras[(cameras.indexOf($('camera').value)+1)%cameras.length];api.scene()?.setCamera($('camera').value);}});
+ menuUI=createMenuUI({...api,state:()=>latest,navigate,home,panel:garage,closePanel,replays:replaysMenu,code:()=>workspace('code'),resume});
+ $('titleScreen').onclick=home;workspace('play');navigate('splash');
+ return {restoreSettings:()=>menuUI.restoreSettings(),update,programs(list,b){programs=list;selections();if(b)statusBuild(b);},build:statusBuild,workspace,blocked:()=>mode==='play'&&(menu||busy||replaying||document.body.classList.contains('garage-open')),replaying:()=>replaying};
 }
