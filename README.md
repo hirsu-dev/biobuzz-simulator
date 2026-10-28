@@ -1,6 +1,6 @@
 # BIOBUZZ Simulator
 
-[Play on your phone or computer](https://hrushikbarani-hub.github.io/biobuzz-simulator/)
+[Play on your phone or computer](https://hirsu-dev.github.io/biobuzz-simulator/)
 
 A browser-based 3D FTC practice game with ten simplified robot designs and normal 2-vs-2 matches. You drive R1 with an AI teammate against two AI opponents.
 
