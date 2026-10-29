@@ -147,3 +147,9 @@ body[data-workspace=play][data-panel=settings][data-settings-tab=input] .input-s
  body[data-workspace=play] .play-top{left:10px}.play-top #playGarage{display:none}body[data-workspace=play] .topbar{right:10px}body[data-workspace=play] .workspace-tabs button{font-size:8px}
  body[data-workspace=play] .play-bottom{inset:56px auto auto 12px}#playStatus{display:none}#playInventory{font-size:10px}.play-keyboard{display:none}.touch-actions .touch-shoot{font-size:15px}
 }
+
+#screenToggle{display:flex;align-items:center;justify-content:center;gap:6px;font-size:9px;padding:0 9px;height:32px;white-space:nowrap}#screenToggle svg{width:14px;height:14px}#screenToggle[aria-pressed=true]{border-color:var(--gold);color:var(--gold)}
+html:fullscreen,html:-webkit-full-screen{background:#101114;width:100%;height:100%;overflow:auto}html.game-fullscreen body[data-workspace=play] #viewport{height:100dvh}html.theater-fullscreen body[data-workspace=play] #app{position:fixed;inset:0;width:100%;height:100dvh;z-index:100}html.theater-fullscreen #toast{z-index:110}
+@media(max-width:600px){#screenToggle [data-fullscreen-label]{display:none}#screenToggle{width:32px;padding:6px}body[data-workspace=play] .topbar{gap:6px}body[data-workspace=play] .workspace-tabs{gap:4px}body[data-workspace=play] .workspace-tabs button{padding:0 6px}}
+body[data-workspace=play] #autoIntakeToggle[aria-pressed=true]{color:var(--gold);border-color:var(--gold)}
+@media(max-width:1000px){body[data-workspace=play] #autoIntakeToggle{display:none}}

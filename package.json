@@ -7,7 +7,7 @@
     "dev": "vite --config frontend/vite.config.js --mode web",
     "build": "vite build --config frontend/vite.config.js --mode web",
     "preview": "vite preview --config frontend/vite.config.js --mode web",
-    "test": "node --test tests/browser-engine.test.mjs tests/motion.test.mjs"
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d-deterministic-compat": "0.20.0",

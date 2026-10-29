@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import {createHiveField} from './hive-view.js';
+import {createFlowerField} from './flower-view.js';
+import {LOADING_ZONES,GARDENS} from './field-rules.js';
 import {PoseTrack,dampFactor,angleDelta} from './motion.js';
 
 const palette={red:0xd92d44,blue:0x2866df,metal:0x8b9098,dark:0x202128,yellow:0xf0ce35};
@@ -70,11 +73,12 @@ export function createScene(container,presets,onFps,onFrame=()=>{}){
    for(let axis of ['x','z']){const panel=new THREE.Mesh(new THREE.BoxGeometry(axis==='x'?.012:3.65,.29,axis==='x'?3.65:.012),wallMaterial);panel.position.set(axis==='x'?side*1.84:0,.16,axis==='z'?side*1.84:0);field.add(panel);}
  }
  // Alliance tape and loading zones use FTC field coordinates, converted to Y-up.
+ const legacyZones=new THREE.Group();scene.add(legacyZones);
  for(const side of [-1,1]){const col=side===1?palette.red:palette.blue;
-   box(field,0,.003,side*1.50,3.62,.006,.015,col);
+   box(legacyZones,0,.003,side*1.50,3.62,.006,.015,col);
    const x=side===1?-.914:.914,z=side*1.68;
-   line(field,[[x-.305,.007,z-side*.14],[x+.305,.007,z-side*.14],[x+.305,.007,side*1.82],[x-.305,.007,side*1.82],[x-.305,.007,z-side*.14]],col);
-   const label=textSprite(side===1?'RED ALLIANCE':'BLUE ALLIANCE',side===1?'#e9949b':'#94bce8',.11);label.position.set(0,.02,side*2.04);field.add(label);
+   line(legacyZones,[[x-.305,.007,z-side*.14],[x+.305,.007,z-side*.14],[x+.305,.007,side*1.82],[x-.305,.007,side*1.82],[x-.305,.007,z-side*.14]],col);
+   const label=textSprite(side===1?'RED ALLIANCE':'BLUE ALLIANCE',side===1?'#e9949b':'#94bce8',.11);label.position.set(0,.02,side*2.04);legacyZones.add(label);
  }
  const centerLabel=textSprite('BIOBUZZ','#aab6b9',.19);centerLabel.position.set(.1,.012,0);centerLabel.material.opacity=.33;field.add(centerLabel);
  const scenery=new THREE.Group();scene.add(scenery);
@@ -90,11 +94,15 @@ export function createScene(container,presets,onFps,onFrame=()=>{}){
      const tag=box(group,s*.29,-.018,0,.08,.006,.08,0xe9ecea);box(group,s*.29,-.023,0,.055,.004,.055,0x202930);
    }
  }
- const flowerTops=[];
+ const dsimHive=createHiveField();scene.add(dsimHive.group);dsimHive.group.visible=false;
+ const legacyFlowers=new THREE.Group();scene.add(legacyFlowers);
  for(const [x,z]of[[-1.77,.61],[-.61,-1.77],[1.77,-.61],[.61,1.77]]){
-   for(const y of [.13,.29,.546]){const ring=new THREE.Mesh(new THREE.TorusGeometry(.061,.009,8,32),mat(0xe6d979));ring.rotation.x=Math.PI/2;ring.position.set(x,y,z);scene.add(ring);}
-   const crown=new THREE.Mesh(new THREE.CylinderGeometry(.074,.064,.035,16,1,true),new THREE.MeshBasicMaterial({color:0xd8c574,side:THREE.DoubleSide}));crown.position.set(x,.555,z);scene.add(crown);flowerTops.push(crown);
+   for(const y of [.13,.29,.546]){const ring=new THREE.Mesh(new THREE.TorusGeometry(.061,.009,8,32),mat(0xe6d979));ring.rotation.x=Math.PI/2;ring.position.set(x,y,z);legacyFlowers.add(ring);}
  }
+ const flowerField=createFlowerField();scene.add(flowerField);flowerField.visible=false;
+ const officialZones=new THREE.Group();scene.add(officialZones);officialZones.visible=false;
+ for(let a=0;a<2;a++)for(const zone of [LOADING_ZONES[a],GARDENS[a]])line(officialZones,[[zone.x0,.01,zone.z0],[zone.x1,.01,zone.z0],[zone.x1,.01,zone.z1],[zone.x0,.01,zone.z1],[zone.x0,.01,zone.z0]],a===0?palette.red:palette.blue);
+ for(let a=0;a<2;a++){const label=textSprite(a===0?'RED ALLIANCE':'BLUE ALLIANCE',a===0?'#e9949b':'#94bce8',.11);label.position.set(a===0?-2.1:2.1,.02,0);officialZones.add(label);}
  const trailPoints=[];let trail=null,trailVisible=false,lastReset=-1,state=null,mode='driver',presentation='game',fpsFrames=0,fpsStart=performance.now(),lastStamp=performance.now(),flowerSignature='';
  const cameraGoal=new THREE.Vector3(),lookGoal=new THREE.Vector3(),look=new THREE.Vector3(0,.14,0),offset=new THREE.Vector3(),samplePosition=[0,0,0],qa=new THREE.Quaternion(),qb=new THREE.Quaternion();
  let followHeading=0,zoom=1,cameraSnap=true;
@@ -103,7 +111,7 @@ export function createScene(container,presets,onFps,onFrame=()=>{}){
  const resize=()=>{const w=container.clientWidth,h=container.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();if(['broadcast','top','driver'].includes(mode))setCamera(mode);};new ResizeObserver(resize).observe(container);resize();
  function disposeGroup(group){group.traverse(o=>{o.geometry?.dispose();if(o.material?.map){o.material.map.dispose();o.material.dispose();}else if(o.isLine&&o.material!==outlineMaterial)o.material.dispose();});group.removeFromParent();}
  function update(s,{snap=false}={}){
-   const stamp=performance.now(),reset=lastReset!==s.resetId;state=s;if(reset){lastReset=s.resetId;cameraSnap=true;while(scenery.children.length)disposeGroup(scenery.children[0]);
+   const stamp=performance.now(),reset=lastReset!==s.resetId;state=s;const measured=s.hives[0]?.geometry==='dsim-v2';dsimHive.group.visible=measured;hives.forEach(h=>h.visible=!measured);if(reset){lastReset=s.resetId;cameraSnap=true;while(scenery.children.length)disposeGroup(scenery.children[0]);
      for(const o of s.scenery){if(o.s[1]===.1||o.p[1]===.155)continue;box(scenery,...o.p,...o.s,o.color);}trailPoints.length=0;if(trail){disposeGroup(trail);trail=null;}for(const model of robots.values())model.userData.initialized=false;
    }
    for(const b of s.bots){const config=b.config||presets[b.preset],signature=JSON.stringify(config);let model=robots.get(b.id);if(!model||model.userData.signature!==signature){if(model)disposeGroup(model);model=robotModel(config,b.id);model.userData.signature=signature;model.userData.presetIndex=b.preset;scene.add(model);robots.set(b.id,model);}
@@ -115,7 +123,8 @@ export function createScene(container,presets,onFps,onFrame=()=>{}){
    const visible=new Set(s.pieces.map(p=>p.id));for(const [id,ball]of balls){if(!visible.has(id))ball.visible=false;}
    for(const p of s.pieces){let ball=balls.get(p.id);if(!ball){ball=new THREE.Mesh(ballGeometry[p.color===0?0:1],ballMats[p.color]);ball.castShadow=true;ball.userData.track=new PoseTrack();scene.add(ball);balls.set(p.id,ball);}ball.userData.track.push(p.p,p.q,s.time,stamp,snap||reset||!ball.visible);ball.visible=true;ball.material=ballMats[p.color];ball.geometry=ballGeometry[p.color===0?0:1];}
    s.hives.forEach((h,i)=>{hiveTracks[i].push([h.angle,0,0],[0,0,0,1],s.time,stamp,snap||reset);for(const {wall,side}of hives[i].userData.backWalls)wall.position.x=side*(h.physical?.13:.45);});
-   const signature=JSON.stringify(s.flowers.map(f=>f.held));
+   const physicalFlowers=!!s.flowers[0]?.physical;flowerField.visible=physicalFlowers;legacyFlowers.visible=!physicalFlowers;officialZones.visible=physicalFlowers;legacyZones.visible=!physicalFlowers;flowerBalls.visible=!physicalFlowers;
+   const signature=physicalFlowers?'physical':JSON.stringify(s.flowers.map(f=>f.held));
    if(signature!==flowerSignature||reset){flowerSignature=signature;flowerBalls.clear();s.flowers.forEach(f=>f.held.slice(0,8).forEach((color,i)=>{const ball=new THREE.Mesh(ballGeometry[color===0?0:1],ballMats[color]);ball.position.set(f.x,.10+f.held.slice(0,i).reduce((sum,c)=>sum+(c===0?.07112:.09144),0)+(color===0?.03556:.04572),f.z);flowerBalls.add(ball);}));}
    const p=s.bots[0].p;if(trailVisible&&(!trailPoints.length||Math.hypot(p[0]-trailPoints.at(-1)[0],p[2]-trailPoints.at(-1)[2])>.025)){trailPoints.push([p[0],.012,p[2]]);if(trailPoints.length>700)trailPoints.shift();if(trail)disposeGroup(trail);trail=line(scene,trailPoints,0xb5df83);}
  }
@@ -130,15 +139,15 @@ export function createScene(container,presets,onFps,onFrame=()=>{}){
    if(document.body.dataset.workspace==='play'&&(document.body.classList.contains('garage-open')||(document.body.classList.contains('menu-open')&&['setup','replays'].includes(document.body.dataset.menuScreen))))return;
    for(const model of robots.values())pose(model,sampleStamp);
    for(const ball of balls.values())if(ball.visible)pose(ball,sampleStamp);
-   hiveTracks.forEach((t,i)=>{if(t.ready)hives[i].rotation.z=t.position(sampleStamp,samplePosition)[0];});
-   const bot=robots.get(0),fit=Math.max(1,1.1/camera.aspect),factor=cameraSnap?1:dampFactor(10,dt);
-   if(presentation==='title'&&bot){cameraGoal.copy(bot.position).add(offset.set(-.68+Math.sin(stamp*.000025)*.10,.54,-.83));lookGoal.copy(bot.position).add(offset.set(.22,.1,-.08));}
+   hiveTracks.forEach((t,i)=>{if(t.ready){const angle=t.position(sampleStamp,samplePosition)[0];hives[i].rotation.z=angle;dsimHive.trays[i].rotation.x=angle;}});
+   const bot=robots.get(0),fit=Math.max(1,.92/camera.aspect),factor=cameraSnap?1:dampFactor(10,dt);
+   if(presentation==='title'&&bot){cameraGoal.copy(bot.position).add(offset.set(...(state?.flowers[0]?.physical?[.85+Math.sin(stamp*.000025)*.1,.58,.68]:[-.68+Math.sin(stamp*.000025)*.10,.54,-.83])));lookGoal.copy(bot.position).add(offset.set(.22,.1,-.08));}
    else if(mode==='orbit'){controls.dampingFactor=dampFactor(8,dt);controls.update();look.copy(controls.target);}
    else {
      lookGoal.set(0,.16,0);
      if(mode==='broadcast')cameraGoal.set(2.9,3.7,3.9).multiplyScalar(fit*zoom);
      if(mode==='top')cameraGoal.set(0,5.6,.001).multiplyScalar(fit*zoom);
-     if(mode==='driver'){cameraGoal.set(0,4.1,4.3).multiplyScalar(fit*zoom);if(bot)lookGoal.set(bot.position.x*.20,.22,bot.position.z*.12-.12);}
+     if(mode==='driver'){cameraGoal.set(...(state?.flowers[0]?.physical?[-4.3,4.1,0]:[0,4.1,4.3])).multiplyScalar(fit*zoom);if(bot)lookGoal.set(bot.position.x*.12,.22,bot.position.z*.12);}
      if(mode==='follow'&&bot){const q=bot.quaternion,heading=Math.atan2(2*(q.w*q.y+q.x*q.z),1-2*(q.y*q.y+q.z*q.z));followHeading+=angleDelta(followHeading,heading)*(cameraSnap?1:dampFactor(9,dt));cameraGoal.copy(bot.position).add(offset.set(-Math.cos(followHeading)*1.8,1.9,Math.sin(followHeading)*1.8).multiplyScalar(Math.max(1,fit*.75)*zoom));lookGoal.copy(bot.position).add(offset.set(Math.cos(followHeading)*.3,.18,-Math.sin(followHeading)*.3));}
    }
    if(mode!=='orbit'||presentation==='title'){camera.position.lerp(cameraGoal,factor);look.lerp(lookGoal,factor);camera.lookAt(look);cameraSnap=false;}

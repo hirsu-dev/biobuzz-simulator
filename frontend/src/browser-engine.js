@@ -1,7 +1,10 @@
 import RAPIER from '@dimforge/rapier3d-deterministic-compat';
 import {FixedClock} from './motion.js';
 import {configureRobot,fieldDrive,holonomic} from './robot-config.js';
+import {HIVE,HIVE_MASS,HIVE_COM,HIVE_INERTIA,HIVE_FRAME,hivePanels,hivePivot,hiveRotation,hiveWorld,segmentPose} from './hive-geometry.js';
 import {HIVE_REST,hiveLoad,hiveWillTip,pollenToTip,cellContains} from './dsim-hive.js';
+import {FLOWER,FLOWERS,FLOWER_PLATES,FLOWER_BOXES,flowerWorld,flowerPlatePanels,flowerScored} from './flower-geometry.js';
+import {LOADING_ZONES,GARDENS,ballInZone,robotInZone} from './field-rules.js';
 
 const clamp=(n,a=-1,b=1)=>Math.max(a,Math.min(b,Number(n)||0));
 const vector=(x=0,y=0,z=0)=>({x,y,z});
@@ -30,35 +33,46 @@ class BrowserEngine {
   this.clock.reset();
   this.world?.free();this.world=new RAPIER.World(vector(0,-9.81,0));this.world.timestep=STEP;
   this.seed=seed|0;this.time=0;this.elapsed=teleopOnly?38:0;this.match=match;this.ended=false;this.resetId++;this.input={};
-  this.bots=[];this.pieces=[];this.scenery=[];this.flowers=[];this.hives=[];this.event='Field ready';
-  let randomState=this.seed>>>0;const random=()=>{randomState=(Math.imul(randomState,1664525)+1013904223)>>>0;return randomState/4294967296;};
+  this.bots=[];this.pieces=[];this.scenery=[];this.flowers=[];this.hives=[];this.reserve=[[],[]];this.loaded=[0,0];this.lastLoad=[-2,-2];this.penalties=[0,0];this.settling=0;this.event='Field ready';
   const box=(x,y,z,sx,sy,sz,color,visible=true)=>{this.world.createCollider(RAPIER.ColliderDesc.cuboid(sx/2,sy/2,sz/2).setTranslation(x,y,z).setFriction(.7));if(visible)this.scenery.push({p:[x,y,z],s:[sx,sy,sz],color});};
-  box(0,-.055,0,3.8,.1,3.8,'#747b80',false);
+  box(0,-.05,0,3.8,.1,3.8,'#747b80',false);
   for(const side of [-1,1]){box(side*1.8538,.155,0,.05,.31,3.76,'#aaa',false);box(0,.155,side*1.8538,3.76,.31,.05,'#aaa',false);}
-  for(const z of [-.61,.61]){box(0,.019,z,.99,.038,.037,'#adb5bf');for(const x of [-.45,.45])box(x,.4,z,.034,.8,.034,'#adb5bf');box(0,.82,z,.93,.03,.035,'#adb5bf');}
-  box(0,1.116,0,.035,.035,1.26,'#cbd0d4');
+  for(const frame of HIVE_FRAME){const {p,s,q}=segmentPose(frame);this.world.createCollider(RAPIER.ColliderDesc.cuboid(s[0]/2,s[1]/2,s[2]/2).setTranslation(...p).setRotation({x:q[0],y:q[1],z:q[2],w:q[3]}));}
   for(let i=0;i<2;i++){
-   const side=i===0?1:-1,hive={side,angle:side*HIVE_REST,tips:0,held:[],tipping:false};
-   const pivot=vector(0,1.116,i===0?.30:-.30);
-   const anchor=this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(pivot.x,pivot.y,pivot.z));
-   hive.body=this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(pivot.x,pivot.y,pivot.z).setRotation({x:0,y:0,z:Math.sin(hive.angle/2),w:Math.cos(hive.angle/2)}).setAngularDamping(4.466).setCanSleep(false).setAdditionalMassProperties(8.618,vector(0,.020,0),vector(.25,.35,1.0),{x:0,y:0,z:0,w:1}));
-   const cup=(x,y,z,sx,sy,sz)=>this.world.createCollider(RAPIER.ColliderDesc.cuboid(sx/2,sy/2,sz/2).setTranslation(x,y,z).setMass(0).setFriction(.35).setRestitution(.08),hive.body);
-   // Open outer ends let actual rigid-body pieces roll out as the tray tilts.
-   for(const side of [-1,1]){cup(side*.29,0,0,.32,.018,.51);cup(side*.13,.08,0,.015,.16,.51);for(const z of [-.25,.25])cup(side*.29,.08,z,.32,.16,.013);}
-   hive.joint=this.world.createImpulseJoint(RAPIER.JointData.revolute(vector(),vector(),vector(0,0,1)),anchor,hive.body,true);
-   hive.joint.setLimits(-HIVE_REST,HIVE_REST);
-   this.hives.push(hive);
+   const side=i===0?-1:1,hive={side,angle:side*HIVE_REST,tips:0,held:[],tipping:false};
+   const pivot=hivePivot(i),anchor=this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed().setTranslation(pivot.x,pivot.y,pivot.z));
+   hive.body=this.world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(pivot.x,pivot.y,pivot.z).setRotation(hiveRotation(hive.angle)).setAngularDamping(4.466).setCanSleep(false).setAdditionalMassProperties(HIVE_MASS,vector(0,HIVE_COM,0),vector(HIVE_INERTIA,HIVE_INERTIA,HIVE_INERTIA),{x:0,y:0,z:0,w:1}));
+   for(const side of [-1,1])for(const panel of hivePanels(side)){
+    const desc=RAPIER.ColliderDesc.convexHull(new Float32Array(panel.points));
+    if(!desc)throw new Error('Invalid hive panel');
+    this.world.createCollider(desc.setDensity(0).setFriction(panel.kind==='floor'?.6:.5).setRestitution(panel.kind==='back'?0:.15).setRestitutionCombineRule(RAPIER.CoefficientCombineRule.Min),hive.body);
+   }
+   hive.joint=this.world.createImpulseJoint(RAPIER.JointData.revolute(vector(),vector(),vector(1,0,0)),anchor,hive.body,true);hive.joint.setLimits(-HIVE_REST,HIVE_REST);this.hives.push(hive);
   }
-  for(const [x,z] of [[-1.77,.61],[-.61,-1.77],[1.77,-.61],[.61,1.77]]){this.flowers.push({x,z,held:[]});for(let k=0;k<4;k++)box(x+Math.cos(k*Math.PI/2)*.065,.273,z+Math.sin(k*Math.PI/2)*.065,.012,.546,.012,'#d8d8cf');}
-  for(let i=0;i<72;i++){let x=random()*3.1-1.55,z=random()*2.7-1.35;if(Math.abs(x)<.65&&Math.abs(z)<.72)x=x<0?-.8:.8;this.addPiece(i<56?0:i<64?1:2,x,.1+random()*.1,z);}
-  const starts=[[.95,1.40,Math.PI/2],[-.95,1.40,Math.PI/2],[-.95,-1.40,-Math.PI/2],[.95,-1.40,-Math.PI/2]];
+  for(const f of FLOWERS){
+   this.flowers.push({...f,held:[]});
+   for(const plate of FLOWER_PLATES)for(const points of flowerPlatePanels(plate)){
+    const worldPoints=[];for(let n=0;n<points.length;n+=3){const p=flowerWorld(f,...points.slice(n,n+3));worldPoints.push(p.x,p.y,p.z);}
+    this.world.createCollider(RAPIER.ColliderDesc.convexHull(new Float32Array(worldPoints)).setFriction(.5).setRestitution(0));
+   }
+   for(const part of FLOWER_BOXES){const p=flowerWorld(f,...part.p),q={x:0,y:Math.sin(Math.atan2(f.nx,f.nz)/2),z:0,w:Math.cos(Math.atan2(f.nx,f.nz)/2)};this.world.createCollider(RAPIER.ColliderDesc.cuboid(...part.s.map(v=>v/2)).setTranslation(p.x,p.y,p.z).setRotation(q));}
+   // Eight contact strips approximate the confinement between the four posts.
+   for(let i=0;i<8;i++){const angle=i*Math.PI/4,r=FLOWER.midRadius+.002,y=(FLOWER.midTop+FLOWER.topBottom)/2;this.world.createCollider(RAPIER.ColliderDesc.cuboid(.004/2,(FLOWER.topBottom-FLOWER.midTop)/2,FLOWER.midRadius*Math.tan(Math.PI/8)+.001).setTranslation(f.x+Math.cos(angle)*r,y,f.z+Math.sin(angle)*r).setRotation({x:0,y:-Math.sin(angle/2),z:0,w:Math.cos(angle/2)}).setFriction(.35).setRestitution(0));}
+   for(let n=0;n<4;n++){const p=this.addPiece(0,f.x,.036+n*.07112,f.z);p.flower=this.flowers.length-1;}
+  }
+  for(const a of [0,1])for(let n=0;n<4;n++)this.addPiece(0,(a===0?-1:1)*(1.79-n*.074),.036,(a===0?1:-1)*1.79);
   for(let id=0;id<4;id++){
-   const preset=this.selection[id],p=this.config(id),[x,z,h]=starts[id];
+   const preset=this.selection[id],p=this.config(id),x=(id<2?-1:1)*(1.8288-p.length/2),z=[1.1,-.15,-1.1,.15][id],h=id<2?0:Math.PI;
    const body=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x,.115,z).setRotation({x:0,y:Math.sin(h/2),z:0,w:Math.cos(h/2)}).setLinearDamping(.08).setAngularDamping(.5).setCanSleep(false).setCcdEnabled(true));
    this.world.createCollider(RAPIER.ColliderDesc.cuboid(p.length/2,.10,p.width/2).setMass(p.mass).setFriction(.08).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min).setRestitution(.05),body);
    const bot={id,preset,config:p,body,held:[],turret:0,hood:.5,lastShot:-2,lastPlace:-2,lastExtract:-2,traction:false,shiftHeld:false,wheelAngles:[0,0,0,0],left:false,autoPark:false};this.bots.push(bot);
-   for(const color of [0,0,id<2?1:2])this.capture(this.addPiece(color,x,.15,z),bot.held);
+   for(let n=0;n<4;n++){const piece=this.addPiece(0,x,.15,z);if(n<p.capacity)this.capture(piece,bot.held);else this.release(piece,x+(id<2?1:-1)*(p.length/2+.035),.036,z+(n-2)*.072,vector());}
   }
+  for(let a=0;a<2;a++){
+   const h=this.hives[a];for(let n=0;n<3;n++){const p=hiveWorld(hivePivot(a),h.angle,(n-1)*.094,HIVE.floor+.046,-h.side*(HIVE.near+.06));this.addPiece(a+1,p.x,p.y,p.z);}
+   for(let n=0;n<5;n++)this.capture(this.addPiece(a+1,0,0,0),this.reserve[a]);
+  }
+  this.updateFlowers();
  }
  addPiece(color,x,y,z){
   const radius=color===0?.03556:.04572,mass=(color===0?.2:.32)*.45359237;
@@ -66,9 +80,9 @@ class BrowserEngine {
   this.world.createCollider(RAPIER.ColliderDesc.ball(radius).setMass(mass).setFriction(.6).setRestitution(.55),body);
   const piece={id:this.pieces.length,color,radius,mass,body,active:true,lastY:y};this.pieces.push(piece);return piece;
  }
- capture(piece,held){piece.active=false;piece.body.setEnabled(false);held.push(piece);}
- release(piece,x,y,z,velocity){piece.active=true;piece.body.setTranslation(vector(x,y,z),true);piece.body.setLinvel(velocity,true);piece.body.setAngvel(vector(),true);piece.body.setEnabled(true);piece.lastY=y;}
- goal(alliance){return vector(this.hives[alliance].side*.28,1.40,alliance===0?.30:-.30);}
+ capture(piece,held){piece.active=false;piece.flower=null;piece.body.setEnabled(false);held.push(piece);}
+ release(piece,x,y,z,velocity){piece.active=true;piece.flower=null;piece.body.setTranslation(vector(x,y,z),true);piece.body.setLinvel(velocity,true);piece.body.setAngvel(vector(),true);piece.body.setEnabled(true);piece.lastY=y;}
+ goal(alliance){const h=this.hives[alliance],taking=h.tipping&&h.angle*h.side<0?-h.side:h.side;return hiveWorld(hivePivot(alliance),h.angle,0,.12,-taking*(HIVE.far-.025));}
  drive(bot,forward,strafe,turn){
   const p=bot.config,at=bot.body.translation();if(at.y>.19)return;
   if(!holonomic(p,bot.traction))strafe=0;
@@ -103,26 +117,63 @@ class BrowserEngine {
  placeFlower(bot){
   const p=bot.config,at=bot.body.translation();
   if(!(p.lift||p.mechanism==='lift')){this.event='Add a Box Tube in Customize to place flowers';return;}
-  if(this.match&&this.elapsed<98){this.event='Flowers open in the last 60 seconds of TeleOp';return;}
   if(!bot.held.length||this.time-bot.lastPlace<.6)return;
   const h=heading(bot.body),mount=p.liftMount==='back'?-1:1,reach=p.length/2+.13;
   const tip={x:at.x+Math.cos(h)*reach*mount,z:at.z-Math.sin(h)*reach*mount};
-  const f=this.flowers.find(f=>Math.hypot(f.x-tip.x,f.z-tip.z)<.16);
+  const f=this.flowers.find(f=>Math.hypot(f.x-tip.x,f.z-tip.z)<.055);
   if(!f){this.event='Align the Box Tube with a flower opening';return;}
-  const piece=bot.held[0],height=f.held.reduce((sum,b)=>sum+b.radius*2,0);
-  if(height+piece.radius*2>.49){this.event='Flower is full';return;}
-  // Placement and stack storage are discrete; loose shots never enter a flower.
-  f.held.push(bot.held.shift());bot.lastPlace=this.time;this.event='Flower placed · '+(piece.color===0?'pollen':piece.color===1?'red nectar':'blue nectar');
+  const piece=bot.held[0];
+  if(this.match&&this.elapsed<98&&piece.color){this.event='G410 · Nectar placement unlocks at 1:00';return;}
+  if(f.held.some(p=>p.body.translation().y+p.radius>FLOWER.topBottom-piece.radius*2)){this.event='Flower opening is full';return;}
+  bot.held.shift();this.release(piece,f.x,FLOWER.topBottom,f.z,vector());piece.flower=this.flowers.indexOf(f);piece.lastAlliance=Math.floor(bot.id/2);bot.lastPlace=this.time;this.event='Placed through flower top · '+(piece.color===0?'pollen':piece.color===1?'red nectar':'blue nectar');
+ }
+ updateFlowers(){
+  for(const f of this.flowers)f.held=[];
+  for(const piece of this.pieces){if(!piece.active)continue;const p=piece.body.translation();
+   if(piece.flower!=null){const f=this.flowers[piece.flower];if(Math.hypot(p.x-f.x,p.z-f.z)>FLOWER.topRadius+.015||p.y-piece.radius>FLOWER.top+.04)piece.flower=null;}
+   if(piece.flower==null)for(let i=0;i<this.flowers.length;i++){
+    const f=this.flowers[i];if(piece.lastY>=FLOWER.top&&p.y<FLOWER.top&&Math.hypot(p.x-f.x,p.z-f.z)<FLOWER.topRadius-piece.radius*.6){
+     piece.flower=i;
+     if(this.match&&this.elapsed<98&&piece.color&&piece.lastAlliance!=null){this.penalties[1-piece.lastAlliance]+=20;this.event='G410 · Early nectar: +20 to opponents';}
+     break;
+    }
+   }
+   if(piece.flower!=null)this.flowers[piece.flower].held.push(piece);
+  }
+  for(const f of this.flowers)f.held.sort((a,b)=>a.body.translation().y-b.body.translation().y);
+ }
+ retrieveFlower(bot){
+  const p=bot.config,at=bot.body.translation(),h=heading(bot.body);
+  if(bot.held.length>=Math.min(4,p.capacity)||this.time-bot.lastExtract<.3)return;
+  for(const f of this.flowers){
+   const piece=f.held[0];if(!piece||piece.color!==0||piece.body.translation().y>FLOWER.mid)continue;
+   // The intake must face the open, field-facing bottom of the flower.
+   for(const sign of p.intakeMount==='both'?[1,-1]:[p.intakeMount==='back'?-1:1]){
+    const fx=Math.cos(h)*sign,fz=-Math.sin(h)*sign,dx=f.x-at.x,dz=f.z-at.z,ahead=dx*fx+dz*fz,across=-dx*fz+dz*fx;
+    if(fx*f.nx+fz*f.nz>-.75||ahead<p.length/2||ahead>p.length/2+.16||Math.abs(across)>Math.min(.055,p.width*.35))continue;
+    f.held.shift();this.capture(piece,bot.held);bot.lastExtract=this.time;this.event='Intake collected flower pollen';return;
+   }
+  }
+ }
+ loadNectar(){
+  for(let a=0;a<2;a++){
+   const available=!this.match||this.elapsed>=98?5:this.hives[a].tips;
+   if(!this.reserve[a].length||this.loaded[a]>=available||this.time-this.lastLoad[a]<1)continue;
+   const x=(a===0?-1:1)*1.72,z=(a===0?-1:1)*.9;
+   if(this.bots.some(b=>Math.hypot(b.body.translation().x-x,b.body.translation().z-z)<.4)||this.pieces.some(p=>p.active&&Math.hypot(p.body.translation().x-x,p.body.translation().z-z)<.13))continue;
+   const piece=this.reserve[a].shift();this.release(piece,x,.046,z,vector());this.loaded[a]++;this.lastLoad[a]=this.time;
+  }
  }
  interact(bot,intake,shoot,power,extract=false,place=false){
   const p=bot.config,at=bot.body.translation(),h=heading(bot.body),fx=Math.cos(h),fz=-Math.sin(h);
-  if(intake>0&&bot.held.length<p.capacity)for(const piece of this.pieces){if(!piece.active)continue;const q=piece.body.translation(),dx=q.x-at.x,dz=q.z-at.z,ahead=dx*fx+dz*fz,side=-dx*fz+dz*fx;if(q.y<.15&&((p.intakeMount!=='back'&&ahead>p.length*.25&&ahead<p.length*.5+.15)||(p.intakeMount!=='front'&&p.intakeMount&&ahead< -p.length*.25&&ahead> -p.length*.5-.15))&&Math.abs(side)<p.width*(p.mechanism==='wide'?.68:.48)){this.capture(piece,bot.held);if(bot.held.length>=p.capacity)break;}}
+  if(intake>0){this.retrieveFlower(bot);if(bot.held.length<Math.min(4,p.capacity))for(const piece of this.pieces){if(!piece.active||piece.flower!=null||piece.waitForFloor||piece.color===2-Math.floor(bot.id/2))continue;const q=piece.body.translation(),dx=q.x-at.x,dz=q.z-at.z,ahead=dx*fx+dz*fz,side=-dx*fz+dz*fx;if(q.y<piece.radius+.025&&((p.intakeMount!=='back'&&ahead>p.length*.25&&ahead<p.length*.5+.15)||(p.intakeMount!=='front'&&p.intakeMount&&ahead< -p.length*.25&&ahead> -p.length*.5-.15))&&Math.abs(side)<p.width*(p.mechanism==='wide'?.68:.48)){this.capture(piece,bot.held);if(bot.held.length>=Math.min(4,p.capacity))break;}}}
   if(place){this.placeFlower(bot);return;}
-  if(extract&&this.time-bot.lastExtract>.3)for(const f of this.flowers)if(f.held[0]?.color===0&&Math.hypot(f.x-at.x,f.z-at.z)<.38){this.release(f.held.shift(),at.x+fx*.28,.10,at.z+fz*.28,vector(fx*.4,0,fz*.4));bot.lastExtract=this.time;this.event='Pollen released from flower';break;}
+  if(extract)this.retrieveFlower(bot); // Older replays/input clients remain compatible.
   if(intake<0&&bot.held.length&&this.time-bot.lastShot>.3){this.release(bot.held.shift(),at.x+fx*(p.length/2+.1),.10,at.z+fz*(p.length/2+.1),vector(fx*1.3,.1,fz*1.3));bot.lastShot=this.time;}
   if(!shoot||power<.12||!bot.held.length||this.time-bot.lastShot<p.cooldown)return;
   if(p.pollenOnly&&bot.held[0].color!==0){this.event='Pollen-only turret · eject nectar or use a Box Tube';return;}
   bot.lastShot=this.time;const piece=bot.held.shift();
+  piece.lastAlliance=Math.floor(bot.id/2);
   if(p.mechanism==='lift'){this.release(piece,at.x+fx*.32,.68,at.z+fz*.32,vector(fx*.25,0,fz*.25));return;}
   const a=h+(isTurret(p)?bot.turret:0),pitch=bot.assisted?bot.aimPitch:(p.shotAngle+(bot.hood-.5)*35)*Math.PI/180,speed=bot.assisted?bot.aimSpeed:p.shotSpeed*power/.82,v=bot.body.linvel();
   this.release(piece,at.x+Math.cos(a)*(p.length/2+.08),at.y+.26,at.z-Math.sin(a)*(p.length/2+.08),vector(Math.cos(a)*Math.cos(pitch)*speed+v.x,Math.sin(pitch)*speed+v.y,-Math.sin(a)*Math.cos(pitch)*speed+v.z));
@@ -135,49 +186,52 @@ class BrowserEngine {
   this.drive(bot,fire?0:clamp(Math.hypot(tx-at.x,tz-at.z)*1.4,0,.65)*Math.max(0,Math.cos(error)),0,clamp(-error*1.8));
   bot.hood=.5;bot.turret=0;bot.assisted=fire;this.interact(bot,1,fire&&Math.abs(error)<.12,fire?this.shotPower(bot):.82);
  }
- parked(bot){const p=bot.body.translation();return bot.id<2?p.z>1.50&&p.x> -1.22&&p.x<-.61:p.z< -1.50&&p.x>.61&&p.x<1.22;}
+ parked(bot){return robotInZone(bot.body.translation(),heading(bot.body),bot.config.length,bot.config.width,LOADING_ZONES[Math.floor(bot.id/2)]);}
  updateScoring(){
-  for(const b of this.bots)if(this.match&&this.elapsed<30&&(b.id<2?b.body.translation().z<1.18:b.body.translation().z> -1.18))b.left=true;
+  this.updateFlowers();
+  for(const b of this.bots)if(this.match&&this.elapsed<30){const p=b.body.translation(),a=heading(b.body),reach=Math.abs(Math.cos(a))*b.config.length/2+Math.abs(Math.sin(a))*b.config.width/2;b.left=b.id<2?p.x-reach> -1.825:p.x+reach<1.825;}
   for(const piece of this.pieces){if(!piece.active)continue;const p=piece.body.translation(),v=piece.body.linvel();
-   piece.lastY=p.y;if(p.y<-.3||Math.abs(p.x)>3||Math.abs(p.z)>3)this.release(piece,clamp(p.x,-1.6,1.6),.12,clamp(p.z,-1.6,1.6),vector());
+   if(p.y<=piece.radius+.004)piece.waitForFloor=false;piece.lastY=p.y;if(p.y<-.3||Math.abs(p.x)>3||Math.abs(p.z)>3)this.release(piece,clamp(p.x,-1.6,1.6),.12,clamp(p.z,-1.6,1.6),vector());
   }
   for(let i=0;i<2;i++){
-   const h=this.hives[i],q=h.body.rotation();h.angle=2*Math.atan2(q.z,q.w);
+   const h=this.hives[i],q=h.body.rotation();h.angle=2*Math.atan2(q.x,q.w);
    h.held=this.pieces.filter(p=>p.active&&cellContains(p.body.translation(),h.body.translation(),h.angle,h.side));
    if(!h.tipping&&hiveWillTip(hiveLoad(h.held))){
-    h.tipping=true;h.target=-h.side;h.body.setBodyType(RAPIER.RigidBodyType.Dynamic,true);h.body.setAngvel(vector(0,0,-h.side*.12),true);this.event=(i===0?'Red':'Blue')+' hive tipping';
+    for(const piece of h.held)piece.waitForFloor=true;
+    h.tipping=true;h.target=-h.side;h.body.setBodyType(RAPIER.RigidBodyType.Dynamic,true);h.body.setAngvel(vector(-h.side*.12,0,0),true);this.event=(i===0?'Red':'Blue')+' hive tipping';
    }
    if(h.tipping){
-    const w=h.body.angvel().z;
-    if(h.angle*h.target>=HIVE_REST-.008){
+    const w=h.body.angvel().x;
+    if(h.angle*h.target>=29*Math.PI/180&&Math.abs(w)<.15){
      h.side=h.target;h.tipping=false;h.tips++;h.angle=h.side*HIVE_REST;
-     h.body.setAngvel(vector(),true);h.body.setRotation({x:0,y:0,z:Math.sin(h.angle/2),w:Math.cos(h.angle/2)},true);
+     h.body.setAngvel(vector(),true);h.body.setRotation(hiveRotation(h.angle),true);
      h.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased,true);this.event=(i===0?'Red':'Blue')+' hive tip +20';
-    }else if(w*h.target<.12)h.body.setAngvel(vector(0,0,h.target*.12),true);
+    }else if(Math.abs(h.angle)<29*Math.PI/180&&w*h.target<.12)h.body.setAngvel(vector(h.target*.12,0,0),true);
    }
   }
  }
- score(){const score=this.hives.map(h=>h.tips*20+h.held.length*2);for(const f of this.flowers){const nectar=f.held.filter(p=>p.color);if(nectar.length){score[nectar.at(-1).color-1]+=f.held.length*2;score[nectar[0].color-1]+=5;}}for(const b of this.bots)score[Math.floor(b.id/2)]+=(b.left?3:0)+(b.autoPark?5:0)+(this.parked(b)?5:0);for(const piece of this.pieces)if(piece.active){const p=piece.body.translation();if(p.y<.1&&p.x>1.7&&p.z>1.22)score[0]++;if(p.y<.1&&p.x< -1.7&&p.z< -1.22)score[1]++;}return score;}
+ score(){const score=this.hives.map((h,a)=>h.tips*20+h.held.length*2+this.penalties[a]);for(const f of this.flowers){const scored=f.held.filter(flowerScored),nectar=scored.filter(p=>p.color);if(nectar.length){score[nectar.at(-1).color-1]+=scored.length*2;score[nectar[0].color-1]+=5;}}for(const b of this.bots)score[Math.floor(b.id/2)]+=(b.left?3:0)+(b.autoPark?5:0)+(this.parked(b)?5:0);for(const piece of this.pieces)if(piece.active&&piece.flower==null){const p=piece.body.translation();if(p.y<piece.radius+.02)for(let a=0;a<2;a++)if(ballInZone(p,piece.radius,GARDENS[a]))score[a]++;}return score;}
  step(force=false){
   if((this.paused&&!force)||this.ended)return;
   this.time+=STEP;const before=this.elapsed;if(this.match)this.elapsed=Math.min(158,this.elapsed+STEP);
   if(this.match&&before<30&&this.elapsed>=30)for(const b of this.bots)b.autoPark=this.parked(b);
-  const transition=this.match&&this.elapsed>=30&&this.elapsed<38;
-  if(!transition){
+  const transition=this.match&&this.elapsed>=30&&this.elapsed<38,finished=this.match&&this.elapsed>=158;
+  if(!transition&&!finished){
    for(const bot of this.bots){if(bot.id===0){const p=bot.config,input=this.match&&this.elapsed<30?{}:this.input;
      if(input.shift&&!bot.shiftHeld&&p.drive==='butterfly')bot.traction=!bot.traction;bot.shiftHeld=!!input.shift;
-     const drive=input.fieldRelative&&holonomic(p,bot.traction)?fieldDrive(clamp(input.forward),clamp(input.strafe),heading(bot.body)):input;
+     // Browser red station is on -X: forward is +X, right is +Z, independent of robot yaw.
+     const drive=input.fieldRelative&&holonomic(p,bot.traction)?fieldDrive(-clamp(input.strafe),clamp(input.forward),heading(bot.body)):input;
      this.drive(bot,clamp(drive.forward),clamp(drive.strafe),clamp(input.turn));bot.assisted=false;bot.hood=clamp(input.elevation??.5,0,1);bot.turret=clamp(input.aim,-Math.PI,Math.PI);let power=clamp(input.power??.82,0,1.2);
      if(input.assist&&isTurret(p)){const at=bot.body.translation(),g=this.goal(0);bot.turret=wrap(Math.atan2(-(g.z-at.z),g.x-at.x)-heading(bot.body));power=this.shotPower(bot);bot.turret=wrap(bot.aimBearing-heading(bot.body));bot.assisted=true;}
      this.interact(bot,input.eject?-1:input.intake?1:0,!!input.shoot,power,!!input.extract,!!input.place);
     }else if(this.ai)this.runAI(bot);else this.drive(bot,0,0,0);
    }
-   this.world.step();this.updateScoring();
   }
-  if(this.match&&this.elapsed>=158){this.ended=true;this.input={};for(const b of this.bots){b.body.setLinvel(vector(),true);b.body.setAngvel(vector(),true);}this.event='Match complete';}
+  this.world.step();this.updateScoring();if(!finished&&!transition)this.loadNectar();
+  if(finished){this.input={};this.settling+=STEP;this.event='Time expired · waiting for pieces to settle';if(this.settling>=10||(this.settling>1&&!this.hives.some(h=>h.tipping)&&this.pieces.every(p=>!p.active||Math.hypot(...Object.values(p.body.linvel()))<.08))){this.ended=true;this.event='Match complete';}}
  }
  snapshot(){
-  const a={time:this.time,elapsed:this.elapsed,match:this.match,ended:this.ended,seed:this.seed,resetId:this.resetId,phase:!this.match?'PRACTICE':this.ended?'FINISHED':this.elapsed<30?'AUTO':this.elapsed<38?'TRANSITION':this.elapsed<138?'TELEOP':'ENDGAME',remaining:!this.match?0:this.elapsed<30?30-this.elapsed:this.elapsed<38?38-this.elapsed:158-this.elapsed,score:this.score(),event:this.event,ai:this.ai,java:false,scenery:this.scenery,bots:this.bots.map(b=>({...transform(b.body),id:b.id,preset:b.preset,config:b.config,traction:b.traction,liftActive:this.time-b.lastPlace<.6,wheelAngles:b.wheelAngles,held:b.held.map(p=>p.color),turret:b.turret,hood:b.hood,speed:Math.hypot(...Object.values(b.body.linvel()))})),pieces:this.pieces.filter(p=>p.active).map(p=>({...transform(p.body),id:p.id,color:p.color,radius:p.radius})),hives:this.hives.map(h=>({angle:h.angle,side:h.side,count:h.held.length,physical:true,tipping:h.tipping,toTip:pollenToTip(h.held),tips:h.tips})),flowers:this.flowers.map(f=>({x:f.x,z:f.z,held:f.held.map(p=>p.color)}))};
+  const a={time:this.time,elapsed:this.elapsed,match:this.match,ended:this.ended,seed:this.seed,resetId:this.resetId,phase:!this.match?'PRACTICE':this.ended?'FINISHED':this.match&&this.elapsed>=158?'SETTLING':this.elapsed<30?'AUTO':this.elapsed<38?'TRANSITION':this.elapsed<138?'TELEOP':'ENDGAME',remaining:!this.match?0:this.elapsed<30?30-this.elapsed:this.elapsed<38?38-this.elapsed:158-this.elapsed,rules:'TU06 · Oct 22, 2026',reserve:this.reserve.map(r=>r.length),penalties:this.penalties,score:this.score(),event:this.event,ai:this.ai,java:false,scenery:this.scenery,bots:this.bots.map(b=>({...transform(b.body),id:b.id,preset:b.preset,config:b.config,traction:b.traction,liftActive:this.time-b.lastPlace<.6,wheelAngles:b.wheelAngles,held:b.held.map(p=>p.color),turret:b.turret,hood:b.hood,speed:Math.hypot(...Object.values(b.body.linvel()))})),pieces:this.pieces.filter(p=>p.active).map(p=>({...transform(p.body),id:p.id,color:p.color,radius:p.radius})),hives:this.hives.map(h=>({angle:h.angle,side:h.side,count:h.held.length,physical:true,geometry:'dsim-v2',pivot:hivePivot(this.hives.indexOf(h)),tipping:h.tipping,toTip:pollenToTip(h.held),tips:h.tips})),flowers:this.flowers.map(f=>({x:f.x,z:f.z,physical:true,held:f.held.map(p=>p.color),scored:f.held.filter(flowerScored).map(p=>p.color)}))};
   const p=this.bots[0].body.translation();return {type:'state',arena:a,sim:{paused:this.paused,stepRate:120,simTime:this.time},robot:{x:p.x/.0254,y:p.z/.0254,headingDeg:heading(this.bots[0].body)*180/Math.PI},opmode:{state:'IDLE',runtime:0,error:'',warning:''},battery:{volts:12.8},devices:[],telemetry:{lines:['Browser practice physics · 120 Hz','FTC Java runs in the desktop edition.']},panels:{lines:[]},dashboard:{lines:[]}};
  }
  send(m){
