@@ -51,3 +51,7 @@ body.browser-engine .station { display:none; }
  body.touch-controls[data-workspace=play] .play-bottom { inset:55px 18px auto; }
  #playStatus { display:none; } .play-menu .menu-footnote { display:none; }
 }
+
+.touch-actions [data-touch-action=shift]{grid-column:1 / -1;min-height:30px;font-size:12px}
+.builder-grid select{width:100%;padding:9px;background:#202228;color:#eee;border:1px solid #555}.builder-lift{display:flex;gap:10px;align-items:center;margin:20px 0}.builder-credit{font-size:12px;opacity:.7}#setupCustomize{font-size:14px;margin-top:8px;padding:8px 16px}
+@media(max-width:700px){.builder-grid{grid-template-columns:1fr 1fr}}

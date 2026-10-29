@@ -10,7 +10,7 @@
     "test": "node --test tests/browser-engine.test.mjs tests/motion.test.mjs"
   },
   "dependencies": {
-    "@dimforge/rapier3d-compat": "0.19.3",
+    "@dimforge/rapier3d-deterministic-compat": "0.20.0",
     "lucide": "^0.468.0",
     "three": "^0.180.0"
   },

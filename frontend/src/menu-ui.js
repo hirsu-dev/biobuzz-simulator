@@ -5,10 +5,10 @@ export function createMenuUI(api){
  const presets=api.presets();
  $('setupRobot').replaceChildren(...presets.map((p,i)=>new Option(p.name,String(i))));
  function setup(state){
-  selected=api.selectedSlot();const p=presets[state?.arena.bots[selected].preset??[0,5,6,2][selected]],index=presets.indexOf(p);
-  const key=`${selected}:${state?.arena.bots.map(b=>b.preset).join(',')}`;if(key===lastSelection)return;lastSelection=key;
+  selected=api.selectedSlot();const index=state?.arena.bots[selected].preset??[0,5,6,2][selected],p=state?.arena.bots[selected].config||presets[index];
+  const key=`${selected}:${JSON.stringify(state?.arena.bots.map(b=>[b.preset,b.config]))}`;if(key===lastSelection)return;lastSelection=key;
   $('setupRobot').value=String(index);$('setupRobotName').textContent=p.name;$('setupRobotFamily').textContent=p.family;
-  api.preview(index,selected);$('selectedAlliance').textContent=selected<2?'RED ALLIANCE':'BLUE ALLIANCE';$('selectedAlliance').className=selected<2?'red-text':'blue-text';
+  api.preview(index,selected,p);$('selectedAlliance').textContent=selected<2?'RED ALLIANCE':'BLUE ALLIANCE';$('selectedAlliance').className=selected<2?'red-text':'blue-text';
   $('selectedRole').textContent=['YOU','TEAMMATE · AI','OPPONENT · AI','OPPONENT · AI'][selected];
   for(const button of document.querySelectorAll('[data-slot]'))button.classList.toggle('active',Number(button.dataset.slot)===selected);
   const stats=[['DRIVE SPEED',p.speed+' m/s',p.speed/3,'gold'],['MASS',p.mass+' kg',p.mass/20,'green'],['SHOT SPEED',p.shotSpeed+' m/s',p.shotSpeed/8,'gold'],['FIRE RATE',(1/p.cooldown).toFixed(1)+' /s',1/p.cooldown/4,'red'],['CAPACITY',p.capacity+' PIECES',p.capacity/6,'gold']];
@@ -18,10 +18,11 @@ export function createMenuUI(api){
   for(let n=1;n<6;n++)svg+=`<path d="M${n*400/6} 0V400M0 ${n*400/6}H400" stroke="#33363f" stroke-width=".7"/>`;
   svg+='<rect x="145" y="133" width="110" height="134" fill="none" stroke="#858995"/><path d="M200 130V270" stroke="#9296a0"/><rect x="172" y="220" width="57" height="24" fill="#993943" stroke="#d85660"/><rect x="172" y="156" width="57" height="24" fill="#284c91" stroke="#5985d9"/>';
   for(const [x,z] of [[-1.77,.61],[-.61,-1.77],[1.77,-.61],[.61,1.77]])svg+=`<circle cx="${map(x)}" cy="${map(z)}" r="7" fill="none" stroke="#d4c57b"/>`;
-  positions.forEach(([x,z],slot)=>{const p=presets[state?.arena.bots[slot].preset??[0,5,6,2][slot]],size=p.length/3.6576*400;svg+=`<g data-map-slot="${slot}" role="button" tabindex="0" aria-label="Select ${['R1 your robot','R2 teammate','B1 opponent','B2 opponent'][slot]}"><rect x="${map(x)-size/2}" y="${map(z)-size/2}" width="${size}" height="${size}" fill="${slot<2?'#73313c':'#293f75'}" stroke="${slot===selected?'#f3d535':slot<2?'#de6a72':'#658ed9'}" stroke-width="${slot===selected?3:1}"/><path d="M${map(x)-5} ${map(z)+(slot<2?-size/2:size/2)}h10l-5 ${slot<2?-7:7}Z" fill="#dddfe7"/><text x="${map(x)}" y="${map(z)+4}" text-anchor="middle" fill="#eee" font-size="10">${['R1','R2','B1','B2'][slot]}</text></g>`;});
+  positions.forEach(([x,z],slot)=>{const p=state?.arena.bots[slot].config||presets[state?.arena.bots[slot].preset??[0,5,6,2][slot]],size=p.length/3.6576*400;svg+=`<g data-map-slot="${slot}" role="button" tabindex="0" aria-label="Select ${['R1 your robot','R2 teammate','B1 opponent','B2 opponent'][slot]}"><rect x="${map(x)-size/2}" y="${map(z)-size/2}" width="${size}" height="${size}" fill="${slot<2?'#73313c':'#293f75'}" stroke="${slot===selected?'#f3d535':slot<2?'#de6a72':'#658ed9'}" stroke-width="${slot===selected?3:1}"/><path d="M${map(x)-5} ${map(z)+(slot<2?-size/2:size/2)}h10l-5 ${slot<2?-7:7}Z" fill="#dddfe7"/><text x="${map(x)}" y="${map(z)+4}" text-anchor="middle" fill="#eee" font-size="10">${['R1','R2','B1','B2'][slot]}</text></g>`;});
   $('setupFieldMap').innerHTML=svg;
   for(const el of $('setupFieldMap').querySelectorAll('[data-map-slot]')){const choose=()=>document.querySelector(`[data-slot="${el.dataset.mapSlot}"]`).click();el.onclick=choose;el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();choose();}};}
  }
+ $('setupCustomize').onclick=()=>document.getElementById('configure').click();
  $('setupRobot').onchange=()=>{if(api.state()?.arena.java){$('setupRobot').value=String(api.state().arena.bots[selected].preset);api.toast('Stop the Java OpMode before changing robots.',true);return;}api.arena('preset',{slot:selected,preset:Number($('setupRobot').value)});};
  for(const button of document.querySelectorAll('[data-slot]'))button.addEventListener('click',()=>{lastSelection='';setup(api.state());});
  for(const button of document.querySelectorAll('[data-settings-tab]'))button.onclick=()=>{settingsTab=button.dataset.settingsTab;document.body.dataset.settingsTab=settingsTab;document.querySelectorAll('[data-settings-tab]').forEach(b=>b.setAttribute('aria-selected',String(b===button)));};

@@ -35,6 +35,7 @@ export function createPlayController(api) {
  function error(e){api.toast(e.message,true);show('countdown',false);busy=false;active=false;api.send({type:'sim.pause',paused:true});navigate('pause');$('menuTitle').textContent='CHECK YOUR PROGRAM';$('menuDescription').textContent=e.message;show('resumeGame',false);}
  async function begin(practice=false){
   if(busy)return;
+  $('camera').value='driver';api.scene()?.setCamera('driver');
   const useJava=$('playControl').value==='java',full=$('playFormat').value==='full';
   if(useJava&&!ready()){api.toast('Save and successfully compile your code in Code testing first.',true);return;}
   if(useJava&&!$('teleProgram').value){api.toast('Choose a TeleOp from your compiled project.',true);return;}
@@ -68,7 +69,7 @@ export function createPlayController(api) {
   latest=s;const a=s.arena;if(!a)return;menuUI?.setup(s);
   $('controlBadge').textContent=a.java?'JAVA OPMODE':'DRIVER CONTROL';
   $('playInventory').textContent=`POLLEN / NECTAR  ${a.bots[0].held.length}/${api.presets()[a.bots[0].preset]?.capacity||4}`;
-  $('playStatus').textContent=s.sim.paused?'PAUSED':a.phase==='AUTO'?'AUTONOMOUS':a.phase==='TRANSITION'?'DRIVER TRANSITION':a.ended?'MATCH OVER':a.java?'JAVA CONTROL':'DRIVE READY';
+  $('playStatus').textContent=s.sim.paused?'PAUSED':a.phase==='AUTO'?'AUTONOMOUS':a.phase==='TRANSITION'?'DRIVER TRANSITION':a.ended?'MATCH OVER':a.java?'JAVA CONTROL':a.bots[0].config?.drive==='butterfly'?(a.bots[0].traction?'TRACTION · V TO SHIFT':'OMNI · V TO SHIFT'):'DRIVE READY';
   $('javaLive').textContent=a.java?`${s.opmode.name||s.opmode.opModeName||'OpMode'} · ${s.opmode.runtime.toFixed(1)}s`:a.bots[0].speed.toFixed(2)+' m/s';
   if(active&&a.resetId!==framesReset){active=false;recording=[];show('homeContinue',false);show('resumeGame',false);if(menu)navigate('setup');}
   if(active&&a.time-lastRecord>=.25){recording.push(structuredClone(a));lastRecord=a.time;if(recording.length>720)recording.shift();}
