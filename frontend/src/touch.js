@@ -16,7 +16,7 @@ export function createTouchControls({toggleIntake=()=>{}}={}) {
  for(const button of document.querySelectorAll('[data-touch-action]')){
   const action=button.dataset.touchAction;
   if(action==='intake'){button.onclick=e=>{e.stopPropagation();if(enabled)toggleIntake();};continue;}
-  function set(value){if(action==='shoot'){state.a=value;state.rt=value?1:0;}else state[({eject:'lb',extract:'b',place:'x',shift:'y'})[action]]=value;button.classList.toggle('held',value);button.setAttribute('aria-pressed',String(value));}
+  function set(value){if(action==='shoot'){state.a=value;state.rt=value?1:0;}else state[({eject:'lb',extract:'b',place:'x',shift:'y',gear:'b'})[action]]=value;button.classList.toggle('held',value);button.setAttribute('aria-pressed',String(value));}
   button.addEventListener('pointerdown',e=>{if(!enabled)return;e.preventDefault();e.stopPropagation();activePointers.set(action,e.pointerId);button.setPointerCapture(e.pointerId);set(true);});
   const end=e=>{if(activePointers.get(action)!==e.pointerId)return;activePointers.delete(action);set(false);};
   for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,end);

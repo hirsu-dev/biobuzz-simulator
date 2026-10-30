@@ -12,6 +12,7 @@
   "dependencies": {
     "@dimforge/rapier3d-deterministic-compat": "0.20.0",
     "lucide": "^0.468.0",
+    "peerjs": "^1.5.5",
     "three": "^0.180.0"
   },
   "devDependencies": {

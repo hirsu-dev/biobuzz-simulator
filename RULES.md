@@ -9,10 +9,10 @@ Checked [FIRST's current season page](https://ftc-resources.firstinspires.org/ft
 | Intake, G407–409 | Four-piece capacity; opponent nectar rejected; hive spills must reach floor height before collection. |
 | Flowers, G410/G418 | Entry through top, retrieval of bottom pollen using normal intake. Nectar placement unlocks at 1:00. Accidental early nectar entry adds 20 points to the opponent. |
 | Flower scoring | Only partially intersecting the middle-to-top scoring volume counts. Highest scoring nectar owns the flower (2 per element); lowest scoring nectar awards its alliance 5. |
-| Hive scoring | 20 per completed tip; 2 per remaining upward-cell element in the end-state projection. |
+| Hive scoring | 20 per completed tip during play. Remaining upward-cell elements score 2 each only after the match settles. |
 | Other scoring | Garden 1 per element; Auto Leave 3; Auto Park 5; TeleOp Park 5. Zone checks include partial overlap. |
 
-The live HUD projects the end-state achievements. Final scoring waits for settling, bounded to ten seconds. Free drive uses the same initial inventory and allows immediate nectar supply and placement. In matches, a simulated human player releases one reserve nectar per completed tip, then the remaining reserve after 1:00, when its drop location is clear. No extra pieces are created.
+The live HUD counts tips, flowers and penalties. Auto leave/park are banked at 30 seconds, TeleOp park at time expiry, and garden/remaining-cell points after settling. Initial hive nectar and garden pollen do not create points at the start. Solo practice has no end-state bonuses. Final results include a scoring breakdown. Final scoring waits for settling, bounded to ten seconds. Free drive uses the same initial inventory and allows immediate nectar supply and placement. In matches, a simulated human player releases one reserve nectar per completed tip, then the remaining reserve after 1:00, when its drop location is clear. No extra pieces are created.
 
 ## Geometry and control checks
 
@@ -22,4 +22,12 @@ The red driver camera is on the left alliance side. Browser field-relative W poi
 
 ## Remaining limits
 
-Contact intent, pinning, strategic violations, cards, inspections and tournament ranking points are not refereed. Human-player placement and collision materials are estimates. Flowers use annular sectors and an eight-sided confinement approximation; hive skins and ribs are procedural, with no redistributed CAD meshes. The bounded settling window and live score projection may differ from a referee's final assessment. No claim of complete rules enforcement or calibrated real-robot dynamics is made. The desktop Java edition retains its older field/rules implementation.
+Contact intent, pinning, strategic violations, cards, inspections and tournament ranking points are not refereed. Human-player placement and collision materials are estimates. Flowers use annular sectors and an eight-sided confinement approximation; hive skins and ribs are procedural, with no redistributed CAD meshes. The bounded settling window may differ from a referee's final assessment. No claim of complete rules enforcement or calibrated real-robot dynamics is made. The desktop Java edition retains its older field/rules implementation.
+
+## October 30 controls and sessions
+
+Solo practice enables only your robot; other robot bodies are disabled and hidden, and their preloads remain reserved. Timed singleplayer AI plans paths around flowers and hive feet and targets accessible floor pieces. Online rooms have no AI; empty seats stay empty. See [multiplayer behavior and limits](MULTIPLAYER.md).
+
+Settings → Input selects field-relative or robot-relative driving independently of the camera. V / Y / the touch Drive button toggles that saved setting; B / gamepad B switches butterfly traction. The driver camera and field-relative axes use your alliance side.
+
+Flower placement reports readiness in the HUD and requires a Box Tube. A short outlet alignment assist accepts up to 14 cm lateral error and 24 cm beyond the chassis edge; the released ball still falls through the physical top opening. This is an accessibility approximation, not a simulated actuator trajectory. Normal intake retrieves bottom pollen.

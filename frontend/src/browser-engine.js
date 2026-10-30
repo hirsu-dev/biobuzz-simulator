@@ -1,4 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-deterministic-compat';
+import {navigationPath,clearForRobot} from './navigation.js';
 import {FixedClock} from './motion.js';
 import {configureRobot,fieldDrive,holonomic} from './robot-config.js';
 import {HIVE,HIVE_MASS,HIVE_COM,HIVE_INERTIA,HIVE_FRAME,hivePanels,hivePivot,hiveRotation,hiveWorld,segmentPose} from './hive-geometry.js';
@@ -32,7 +33,7 @@ class BrowserEngine {
  reset(seed=this.seed,match=false,teleopOnly=false){
   this.clock.reset();
   this.world?.free();this.world=new RAPIER.World(vector(0,-9.81,0));this.world.timestep=STEP;
-  this.seed=seed|0;this.time=0;this.elapsed=teleopOnly?38:0;this.match=match;this.ended=false;this.resetId++;this.input={};
+  this.seed=seed|0;this.time=0;this.elapsed=teleopOnly?38:0;this.match=match;this.ended=false;this.resetId++;this.input={};this.slotInputs={};this.finalScore=null;this.finalBreakdown=null;this.autoScore=[0,0];
   this.bots=[];this.pieces=[];this.scenery=[];this.flowers=[];this.hives=[];this.reserve=[[],[]];this.loaded=[0,0];this.lastLoad=[-2,-2];this.penalties=[0,0];this.settling=0;this.event='Field ready';
   const box=(x,y,z,sx,sy,sz,color,visible=true)=>{this.world.createCollider(RAPIER.ColliderDesc.cuboid(sx/2,sy/2,sz/2).setTranslation(x,y,z).setFriction(.7));if(visible)this.scenery.push({p:[x,y,z],s:[sx,sy,sz],color});};
   box(0,-.05,0,3.8,.1,3.8,'#747b80',false);
@@ -72,8 +73,13 @@ class BrowserEngine {
    const h=this.hives[a];for(let n=0;n<3;n++){const p=hiveWorld(hivePivot(a),h.angle,(n-1)*.094,HIVE.floor+.046,-h.side*(HIVE.near+.06));this.addPiece(a+1,p.x,p.y,p.z);}
    for(let n=0;n<5;n++)this.capture(this.addPiece(a+1,0,0,0),this.reserve[a]);
   }
+  this.setParticipants(this.networkSlots??(match?[0,1,2,3]:[0]));
   this.updateFlowers();
  }
+ setParticipants(slots){
+  for(const bot of this.bots){bot.present=slots.includes(bot.id);bot.body.setEnabled(bot.present);if(!bot.present)delete this.slotInputs[bot.id];}
+ }
+ setSlotInput(slot,input){if(Number.isInteger(slot)&&this.bots[slot]?.present)this.slotInputs[slot]={input,at:this.time};}
  addPiece(color,x,y,z){
   const radius=color===0?.03556:.04572,mass=(color===0?.2:.32)*.45359237;
   const body=this.world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setTranslation(x,y,z).setLinearDamping(.015).setAngularDamping(.4).setCcdEnabled(true));
@@ -114,18 +120,26 @@ class BrowserEngine {
   bot.aimPitch=Math.atan2(vy,horizontal);bot.aimBearing=Math.atan2(-vz,vx);bot.aimSpeed=Math.hypot(horizontal,vy)*1.008;
  }
  shotPower(bot){this.aimShot(bot);return clamp(bot.aimSpeed/bot.config.shotSpeed*.82,.12,1.2);}
- placeFlower(bot){
+ flowerPlacement(bot){
   const p=bot.config,at=bot.body.translation();
-  if(!(p.lift||p.mechanism==='lift')){this.event='Add a Box Tube in Customize to place flowers';return;}
-  if(!bot.held.length||this.time-bot.lastPlace<.6)return;
-  const h=heading(bot.body),mount=p.liftMount==='back'?-1:1,reach=p.length/2+.13;
-  const tip={x:at.x+Math.cos(h)*reach*mount,z:at.z-Math.sin(h)*reach*mount};
-  const f=this.flowers.find(f=>Math.hypot(f.x-tip.x,f.z-tip.z)<.055);
-  if(!f){this.event='Align the Box Tube with a flower opening';return;}
+  if(!(p.lift||p.mechanism==='lift'))return {ready:false,reason:'equipment',message:'Add a Box Tube in Customize'};
+  if(this.time-bot.lastPlace<.6)return {ready:false,reason:'dropping',message:'Placing piece…'};
+  if(!bot.held.length)return {ready:false,reason:'empty',message:'Intake a piece first'};
   const piece=bot.held[0];
-  if(this.match&&this.elapsed<98&&piece.color){this.event='G410 · Nectar placement unlocks at 1:00';return;}
-  if(f.held.some(p=>p.body.translation().y+p.radius>FLOWER.topBottom-piece.radius*2)){this.event='Flower opening is full';return;}
-  bot.held.shift();this.release(piece,f.x,FLOWER.topBottom,f.z,vector());piece.flower=this.flowers.indexOf(f);piece.lastAlliance=Math.floor(bot.id/2);bot.lastPlace=this.time;this.event='Placed through flower top · '+(piece.color===0?'pollen':piece.color===1?'red nectar':'blue nectar');
+  if(this.match&&this.elapsed<98&&piece.color)return {ready:false,reason:'time',message:'Nectar unlocks at 1:00'};
+  const h=heading(bot.body),mount=p.liftMount==='back'?-1:1,fx=Math.cos(h)*mount,fz=-Math.sin(h)*mount;
+  const index=this.flowers.findIndex(f=>{const dx=f.x-at.x,dz=f.z-at.z,ahead=dx*fx+dz*fz,across=-dx*fz+dz*fx;return fx*f.nx+fz*f.nz<-.65&&ahead>p.length/2+.035&&ahead<p.length/2+.24&&Math.abs(across)<.14;});
+  if(index<0)return {ready:false,reason:'align',message:'Face a flower with the '+(mount<0?'rear':'front')+' Box Tube'};
+  if(this.flowers[index].held.some(p=>p.body.translation().y+p.radius>FLOWER.topBottom-piece.radius*2))return {ready:false,reason:'full',message:'Flower is full'};
+  return {ready:true,reason:'ready',index,message:'Ready · C / FLOWER to place'};
+ }
+ placeFlower(bot){
+  if(this.time-bot.lastPlace<.6)return;
+  const status=this.flowerPlacement(bot);if(!status.ready){this.event=status.message;return;}
+  const f=this.flowers[status.index],piece=bot.held.shift();
+  // A short assisted Box Tube extension centers the outlet; the piece still falls through the physical bore.
+  this.release(piece,f.x,FLOWER.topBottom,f.z,vector());piece.flower=status.index;piece.lastAlliance=Math.floor(bot.id/2);bot.lastPlace=this.time;
+  this.event='Placed through flower top · '+(piece.color===0?'pollen':piece.color===1?'red nectar':'blue nectar');
  }
  updateFlowers(){
   for(const f of this.flowers)f.held=[];
@@ -160,7 +174,7 @@ class BrowserEngine {
    const available=!this.match||this.elapsed>=98?5:this.hives[a].tips;
    if(!this.reserve[a].length||this.loaded[a]>=available||this.time-this.lastLoad[a]<1)continue;
    const x=(a===0?-1:1)*1.72,z=(a===0?-1:1)*.9;
-   if(this.bots.some(b=>Math.hypot(b.body.translation().x-x,b.body.translation().z-z)<.4)||this.pieces.some(p=>p.active&&Math.hypot(p.body.translation().x-x,p.body.translation().z-z)<.13))continue;
+   if(this.bots.some(b=>b.present&&Math.hypot(b.body.translation().x-x,b.body.translation().z-z)<.4)||this.pieces.some(p=>p.active&&Math.hypot(p.body.translation().x-x,p.body.translation().z-z)<.13))continue;
    const piece=this.reserve[a].shift();this.release(piece,x,.046,z,vector());this.loaded[a]++;this.lastLoad[a]=this.time;
   }
  }
@@ -179,9 +193,14 @@ class BrowserEngine {
   this.release(piece,at.x+Math.cos(a)*(p.length/2+.08),at.y+.26,at.z-Math.sin(a)*(p.length/2+.08),vector(Math.cos(a)*Math.cos(pitch)*speed+v.x,Math.sin(pitch)*speed+v.y,-Math.sin(a)*Math.cos(pitch)*speed+v.z));
  }
  runAI(bot){
-  const at=bot.body.translation();let tx,tz,fire=false;
-  if(!bot.held.length){let closest,best=Infinity;for(const piece of this.pieces){const p=piece.body.translation();if(!piece.active||piece.color===2-Math.floor(bot.id/2)||p.y>.15)continue;const d=Math.hypot(p.x-at.x,p.z-at.z);if(d<best){best=d;closest=p;}}if(!closest){this.drive(bot,0,0,0);return;}tx=closest.x;tz=closest.z;}
+  const at=bot.body.translation(),radius=Math.hypot(bot.config.width,bot.config.length)/2+.02;let tx,tz,fire=false;
+  if(!bot.held.length){let closest,best=Infinity;for(const piece of this.pieces){const p=piece.body.translation();if(!piece.active||piece.flower!=null||piece.waitForFloor||piece.color===2-Math.floor(bot.id/2)||p.y>.15||!clearForRobot(p,radius))continue;const d=Math.hypot(p.x-at.x,p.z-at.z);if(d<best){best=d;closest=p;}}if(!closest){this.drive(bot,0,0,0);return;}tx=closest.x;tz=closest.z;}
   else{tx=bot.id===1||bot.id===2?-.95:.95;tz=bot.id<2?1.1:-1.1;fire=Math.hypot(tx-at.x,tz-at.z)<.25;}
+  if(!fire){
+   if(!bot.path||this.time-(bot.pathAt??-1)>.75||Math.hypot(tx-(bot.targetX??99),tz-(bot.targetZ??99))>.2){bot.path=navigationPath(at,{x:tx,z:tz},radius);bot.pathAt=this.time;bot.targetX=tx;bot.targetZ=tz;}
+   while(bot.path.length>1&&Math.hypot(bot.path[0].x-at.x,bot.path[0].z-at.z)<.15)bot.path.shift();
+   if(bot.path.length){tx=bot.path[0].x;tz=bot.path[0].z;}else{this.drive(bot,0,0,0);return;}
+  }
   const goal=fire?this.goal(Math.floor(bot.id/2)):vector(tx,0,tz),error=wrap(Math.atan2(-(goal.z-at.z),goal.x-at.x)-heading(bot.body));
   this.drive(bot,fire?0:clamp(Math.hypot(tx-at.x,tz-at.z)*1.4,0,.65)*Math.max(0,Math.cos(error)),0,clamp(-error*1.8));
   bot.hood=.5;bot.turret=0;bot.assisted=fire;this.interact(bot,1,fire&&Math.abs(error)<.12,fire?this.shotPower(bot):.82);
@@ -210,28 +229,42 @@ class BrowserEngine {
    }
   }
  }
- score(){const score=this.hives.map((h,a)=>h.tips*20+h.held.length*2+this.penalties[a]);for(const f of this.flowers){const scored=f.held.filter(flowerScored),nectar=scored.filter(p=>p.color);if(nectar.length){score[nectar.at(-1).color-1]+=scored.length*2;score[nectar[0].color-1]+=5;}}for(const b of this.bots)score[Math.floor(b.id/2)]+=(b.left?3:0)+(b.autoPark?5:0)+(this.parked(b)?5:0);for(const piece of this.pieces)if(piece.active&&piece.flower==null){const p=piece.body.translation();if(p.y<piece.radius+.02)for(let a=0;a<2;a++)if(ballInZone(p,piece.radius,GARDENS[a]))score[a]++;}return score;}
+ scoreBreakdown(final=this.match&&this.ended){
+  if(this.finalBreakdown)return this.finalBreakdown;
+  // TU06 10.5: only tips/flowers/penalties are live; end-state points wait for their assessment boundary.
+  const rows=this.hives.map((h,a)=>({tips:h.tips*20,flowers:0,penalties:this.penalties[a],auto:0,hive:0,garden:0,park:0}));
+  for(const f of this.flowers){const scored=f.held.filter(flowerScored),nectar=scored.filter(p=>p.color);if(nectar.length){rows[nectar.at(-1).color-1].flowers+=scored.length*2;rows[nectar[0].color-1].flowers+=5;}}
+  if(this.match&&this.elapsed>=30)for(let a=0;a<2;a++)rows[a].auto=this.autoScore[a];
+  if(final){
+   for(let a=0;a<2;a++){const h=this.hives[a];rows[a].hive=this.pieces.filter(p=>p.active&&cellContains(p.body.translation(),h.body.translation(),h.angle,h.side)).length*2;}
+   for(const b of this.bots)if(b.present&&(b.telePark??this.parked(b)))rows[Math.floor(b.id/2)].park+=5;
+   for(const piece of this.pieces)if(piece.active&&piece.flower==null){const p=piece.body.translation();if(p.y<piece.radius+.02)for(let a=0;a<2;a++)if(ballInZone(p,piece.radius,GARDENS[a]))rows[a].garden++;}
+  }
+  return rows;
+ }
+ score(){return this.finalScore??this.scoreBreakdown().map(row=>Object.values(row).reduce((sum,n)=>sum+n,0));}
  step(force=false){
   if((this.paused&&!force)||this.ended)return;
   this.time+=STEP;const before=this.elapsed;if(this.match)this.elapsed=Math.min(158,this.elapsed+STEP);
-  if(this.match&&before<30&&this.elapsed>=30)for(const b of this.bots)b.autoPark=this.parked(b);
+  if(this.match&&before<30&&this.elapsed>=30)for(const b of this.bots){b.autoPark=b.present&&this.parked(b);if(b.present)this.autoScore[Math.floor(b.id/2)]+=(b.left?3:0)+(b.autoPark?5:0);}
+  if(this.match&&before<158&&this.elapsed>=158)for(const b of this.bots)b.telePark=b.present&&this.parked(b);
   const transition=this.match&&this.elapsed>=30&&this.elapsed<38,finished=this.match&&this.elapsed>=158;
   if(!transition&&!finished){
-   for(const bot of this.bots){if(bot.id===0){const p=bot.config,input=this.match&&this.elapsed<30?{}:this.input;
+   for(const bot of this.bots){if(!bot.present)continue;if(bot.id===0||this.networkSlots){const p=bot.config,remote=this.slotInputs[bot.id],input=this.match&&this.elapsed<30?{}:this.networkSlots?(remote&&this.time-remote.at<.5?remote.input:{}):this.input;
      if(input.shift&&!bot.shiftHeld&&p.drive==='butterfly')bot.traction=!bot.traction;bot.shiftHeld=!!input.shift;
      // Browser red station is on -X: forward is +X, right is +Z, independent of robot yaw.
-     const drive=input.fieldRelative&&holonomic(p,bot.traction)?fieldDrive(-clamp(input.strafe),clamp(input.forward),heading(bot.body)):input;
+     const drive=input.fieldRelative&&holonomic(p,bot.traction)?fieldDrive(-clamp(input.strafe)*(bot.id<2?1:-1),clamp(input.forward)*(bot.id<2?1:-1),heading(bot.body)):input;
      this.drive(bot,clamp(drive.forward),clamp(drive.strafe),clamp(input.turn));bot.assisted=false;bot.hood=clamp(input.elevation??.5,0,1);bot.turret=clamp(input.aim,-Math.PI,Math.PI);let power=clamp(input.power??.82,0,1.2);
-     if(input.assist&&isTurret(p)){const at=bot.body.translation(),g=this.goal(0);bot.turret=wrap(Math.atan2(-(g.z-at.z),g.x-at.x)-heading(bot.body));power=this.shotPower(bot);bot.turret=wrap(bot.aimBearing-heading(bot.body));bot.assisted=true;}
+     if(input.assist&&isTurret(p)){const at=bot.body.translation(),g=this.goal(Math.floor(bot.id/2));bot.turret=wrap(Math.atan2(-(g.z-at.z),g.x-at.x)-heading(bot.body));power=this.shotPower(bot);bot.turret=wrap(bot.aimBearing-heading(bot.body));bot.assisted=true;}
      this.interact(bot,input.eject?-1:input.intake?1:0,!!input.shoot,power,!!input.extract,!!input.place);
-    }else if(this.ai)this.runAI(bot);else this.drive(bot,0,0,0);
+    }else if(this.ai&&this.match)this.runAI(bot);else this.drive(bot,0,0,0);
    }
   }
   this.world.step();this.updateScoring();if(!finished&&!transition)this.loadNectar();
-  if(finished){this.input={};this.settling+=STEP;this.event='Time expired · waiting for pieces to settle';if(this.settling>=10||(this.settling>1&&!this.hives.some(h=>h.tipping)&&this.pieces.every(p=>!p.active||Math.hypot(...Object.values(p.body.linvel()))<.08))){this.ended=true;this.event='Match complete';}}
+  if(finished){this.input={};this.settling+=STEP;this.event='Time expired · waiting for pieces to settle';if(this.settling>=10||(this.settling>1&&!this.hives.some(h=>h.tipping)&&this.pieces.every(p=>!p.active||Math.hypot(...Object.values(p.body.linvel()))<.08))){this.ended=true;this.finalBreakdown=this.scoreBreakdown();this.finalScore=this.score();this.event='Match complete';}}
  }
  snapshot(){
-  const a={time:this.time,elapsed:this.elapsed,match:this.match,ended:this.ended,seed:this.seed,resetId:this.resetId,phase:!this.match?'PRACTICE':this.ended?'FINISHED':this.match&&this.elapsed>=158?'SETTLING':this.elapsed<30?'AUTO':this.elapsed<38?'TRANSITION':this.elapsed<138?'TELEOP':'ENDGAME',remaining:!this.match?0:this.elapsed<30?30-this.elapsed:this.elapsed<38?38-this.elapsed:158-this.elapsed,rules:'TU06 · Oct 22, 2026',reserve:this.reserve.map(r=>r.length),penalties:this.penalties,score:this.score(),event:this.event,ai:this.ai,java:false,scenery:this.scenery,bots:this.bots.map(b=>({...transform(b.body),id:b.id,preset:b.preset,config:b.config,traction:b.traction,liftActive:this.time-b.lastPlace<.6,wheelAngles:b.wheelAngles,held:b.held.map(p=>p.color),turret:b.turret,hood:b.hood,speed:Math.hypot(...Object.values(b.body.linvel()))})),pieces:this.pieces.filter(p=>p.active).map(p=>({...transform(p.body),id:p.id,color:p.color,radius:p.radius})),hives:this.hives.map(h=>({angle:h.angle,side:h.side,count:h.held.length,physical:true,geometry:'dsim-v2',pivot:hivePivot(this.hives.indexOf(h)),tipping:h.tipping,toTip:pollenToTip(h.held),tips:h.tips})),flowers:this.flowers.map(f=>({x:f.x,z:f.z,physical:true,held:f.held.map(p=>p.color),scored:f.held.filter(flowerScored).map(p=>p.color)}))};
+  const a={time:this.time,elapsed:this.elapsed,match:this.match,ended:this.ended,seed:this.seed,resetId:this.resetId,phase:!this.match?'PRACTICE':this.ended?'FINISHED':this.match&&this.elapsed>=158?'SETTLING':this.elapsed<30?'AUTO':this.elapsed<38?'TRANSITION':this.elapsed<138?'TELEOP':'ENDGAME',remaining:!this.match?0:this.elapsed<30?30-this.elapsed:this.elapsed<38?38-this.elapsed:158-this.elapsed,rules:'TU06 · Oct 22, 2026',reserve:this.reserve.map(r=>r.length),penalties:this.penalties,score:this.score(),scoreBreakdown:this.scoreBreakdown(),event:this.event,ai:this.ai&&this.match&&!this.networkSlots,java:false,scenery:this.scenery,bots:this.bots.map(b=>({...transform(b.body),id:b.id,present:b.present,preset:b.preset,config:b.config,traction:b.traction,flower:this.flowerPlacement(b),liftActive:this.time-b.lastPlace<.6,wheelAngles:b.wheelAngles,held:b.held.map(p=>p.color),turret:b.turret,hood:b.hood,speed:Math.hypot(...Object.values(b.body.linvel()))})),pieces:this.pieces.filter(p=>p.active).map(p=>({...transform(p.body),id:p.id,color:p.color,radius:p.radius})),hives:this.hives.map(h=>({angle:h.angle,side:h.side,count:h.held.length,physical:true,geometry:'dsim-v2',pivot:hivePivot(this.hives.indexOf(h)),tipping:h.tipping,toTip:pollenToTip(h.held),tips:h.tips})),flowers:this.flowers.map(f=>({x:f.x,z:f.z,physical:true,held:f.held.map(p=>p.color),scored:f.held.filter(flowerScored).map(p=>p.color)}))};
   const p=this.bots[0].body.translation();return {type:'state',arena:a,sim:{paused:this.paused,stepRate:120,simTime:this.time},robot:{x:p.x/.0254,y:p.z/.0254,headingDeg:heading(this.bots[0].body)*180/Math.PI},opmode:{state:'IDLE',runtime:0,error:'',warning:''},battery:{volts:12.8},devices:[],telemetry:{lines:['Browser practice physics · 120 Hz','FTC Java runs in the desktop edition.']},panels:{lines:[]},dashboard:{lines:[]}};
  }
  send(m){
@@ -241,7 +274,7 @@ class BrowserEngine {
   else if(m.type==='arena'){
    if(m.action==='input'){this.input={...m};return;}
    if(m.action==='reset'||m.action==='match')this.reset(m.seed??this.seed,m.action==='match',!!m.teleopOnly);
-   if(m.action==='practice'){this.match=false;this.ended=false;this.elapsed=0;}
+   if(m.action==='practice')this.reset(this.seed,false);
    if(m.action==='ai')this.ai=!!m.enabled;
    if(m.action==='preset'){const slot=clamp(m.slot,0,3)|0,preset=clamp(m.preset,0,this.presets.length-1)|0;this.selection[slot]=preset;this.custom[slot]=null;this.reset();}
    if(m.action==='customize'){const slot=clamp(m.slot,0,3)|0;this.custom[slot]=m.config?configureRobot(this.presets[this.selection[slot]],m.config):null;this.reset();}

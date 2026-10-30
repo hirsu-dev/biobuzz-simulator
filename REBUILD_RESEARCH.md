@@ -27,3 +27,7 @@ Controls, browser simulation advancement, and rendering share a single animation
 ## October 29 update
 
 Simplified bumper/hopper/launcher robot silhouettes, unlit bright balls, thinner field rails and quieter tile seams. Raised driver-station camera is the start-of-match default; manual holonomic WASD stays locked to field axes. Lower assisted ballistic arcs compensate chassis velocity. See [DSIM adaptation details](DSIM_RESEARCH.md) for the deterministic Rapier upgrade, hinged hive, new drivetrains and flower mechanics. These are reference-inspired changes, not verified 1:1 Rebuild rendering or physics.
+
+## October 30 multiplayer
+
+The create-room, invite-code/link, driver-seat, ready and spectator flow follows the public Rebuild multiplayer description. BIOBUZZ implements it with original PeerJS/WebRTC code and a host-browser Rapier world. Rebuild uses dedicated server authority; this website uses private friend rooms with no accounts or public matchmaking. See [networking behavior and limits](MULTIPLAYER.md).

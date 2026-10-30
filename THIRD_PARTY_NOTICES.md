@@ -4,6 +4,12 @@ Bundled packages and full license texts:
 
 - Three.js: MIT, frontend/public/licenses/three.txt
 - Lucide: ISC, frontend/public/licenses/lucide.txt
+- PeerJS: MIT, frontend/public/licenses/peerjs.txt
+- @msgpack/msgpack: ISC, frontend/public/licenses/msgpack.txt
+- peerjs-js-binarypack: MIT, frontend/public/licenses/peerjs-js-binarypack.txt
+- EventEmitter3: MIT, frontend/public/licenses/eventemitter3.txt
+- WebRTC adapter: BSD-3-Clause, frontend/public/licenses/webrtc-adapter.txt
+- SDP: MIT, frontend/public/licenses/sdp.txt
 - Rapier 3D deterministic compat 0.20.0: Apache-2.0, frontend/public/licenses/rapier.txt
 - DSIM adaptations: PolyForm Noncommercial 1.0.0, frontend/public/licenses/DSIM.txt
   Required Notice: Copyright 2026 Dohun Kim (https://github.com/genius0412)
